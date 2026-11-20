@@ -7,7 +7,13 @@ import {
   keymap,
   placeholder,
 } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  redo,
+  undo,
+} from "@codemirror/commands";
 import {
   HighlightStyle,
   syntaxHighlighting,
@@ -83,6 +89,13 @@ const editorTheme = EditorView.theme({
 export interface EditorApi {
   /** Puts a source line at the top of the viewport. */
   scrollToLine: (line: number) => void;
+  /** Wraps the selection, or unwraps it when it is already wrapped. */
+  wrap: (before: string, after: string) => void;
+  /** Turns the selection into a link, with the URL selected for typing. */
+  insertLink: () => void;
+  undo: () => void;
+  redo: () => void;
+  focus: () => void;
 }
 
 export function Editor({
@@ -154,6 +167,52 @@ export function Editor({
     view.current = instance;
     if (api.current) {
       api.current.current = {
+        focus() {
+          instance.focus();
+        },
+        undo() {
+          undo(instance);
+          instance.focus();
+        },
+        redo() {
+          redo(instance);
+          instance.focus();
+        },
+        wrap(before: string, after: string) {
+          const { from, to } = instance.state.selection.main;
+          const text = instance.state.sliceDoc(from, to);
+          const wrapped =
+            text.length >= before.length + after.length &&
+            text.startsWith(before) &&
+            text.endsWith(after);
+          if (wrapped) {
+            const inner = text.slice(before.length, text.length - after.length);
+            instance.dispatch({
+              changes: { from, to, insert: inner },
+              selection: { anchor: from, head: from + inner.length },
+            });
+          } else {
+            instance.dispatch({
+              changes: { from, to, insert: before + text + after },
+              selection: {
+                anchor: from + before.length,
+                head: from + before.length + text.length,
+              },
+            });
+          }
+          instance.focus();
+        },
+        insertLink() {
+          const { from, to } = instance.state.selection.main;
+          const text = instance.state.sliceDoc(from, to) || "链接文字";
+          const inserted = `[${text}]()`;
+          const urlStart = from + 1 + text.length + 2;
+          instance.dispatch({
+            changes: { from, to, insert: inserted },
+            selection: { anchor: urlStart, head: urlStart },
+          });
+          instance.focus();
+        },
         scrollToLine(line: number) {
           const doc = instance.state.doc;
           const clamped = Math.min(Math.max(1, line), doc.lines);

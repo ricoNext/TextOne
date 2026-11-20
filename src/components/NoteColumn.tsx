@@ -27,6 +27,7 @@ export function NoteColumn({
   onDismissError,
   onRename,
   onToggleTask,
+  editorApiRef,
 }: {
   note: OpenNoteView | null;
   mode: EditorMode;
@@ -43,6 +44,8 @@ export function NoteColumn({
   onRename: (title: string) => void;
   /** A checkbox was clicked in the preview: flip that line of the source. */
   onToggleTask: (line: number) => void;
+  /** Owned by App, so the menu bar can drive the editor. */
+  editorApiRef: React.MutableRefObject<EditorApi | null>;
 }) {
   // The title is the file name, so renaming here renames the file on disk.
   const [draft, setDraft] = useState<string | null>(null);
@@ -50,7 +53,6 @@ export function NoteColumn({
 
   // Two-way scroll sync. Whichever pane the reader touched owns the scroll for
   // a moment; the other's programmatic scroll must not bounce it back.
-  const editorApi = useRef<EditorApi | null>(null);
   const previewApi = useRef<PreviewApi | null>(null);
   const owner = useRef<{ source: "editor" | "preview" | null; until: number }>({
     source: null,
@@ -70,7 +72,7 @@ export function NoteColumn({
       return;
     }
     owner.current = { source: "preview", until: performance.now() + 150 };
-    editorApi.current?.scrollToLine(line);
+    editorApiRef.current?.scrollToLine(line);
   }, []);
 
   useEffect(() => setDraft(null), [note?.path]);
@@ -170,7 +172,7 @@ export function NoteColumn({
                 value={note.body}
                 onChange={onChangeBody}
                 onScrollLine={mode === "split" ? fromEditor : undefined}
-                apiRef={editorApi}
+                apiRef={editorApiRef}
                 reveal={reveal}
               />
             </div>

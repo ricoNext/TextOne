@@ -7,6 +7,7 @@
 
 mod commands;
 mod markdown;
+mod menu;
 mod storage;
 
 use commands::VaultState;
@@ -15,6 +16,14 @@ use commands::VaultState;
 pub fn run() {
     tauri::Builder::default()
         .manage(VaultState::default())
+        .setup(|app| {
+            let menu = menu::build(app.handle())?;
+            app.set_menu(menu)?;
+            Ok(())
+        })
+        .on_menu_event(|app, event| {
+            menu::emit(app, event.id().0.as_str());
+        })
         .invoke_handler(tauri::generate_handler![
             commands::vault_open,
             commands::vault_rescan,

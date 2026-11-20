@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { Sidebar } from "./components/Sidebar";
+import type { EditorApi } from "./components/Editor";
 import { NoteList } from "./components/NoteList";
 import { NoteColumn } from "./components/NoteColumn";
 import { Splitter } from "./components/Splitter";
 import {
   createNote,
+  isDesktop,
   openVault,
   readNote,
   renameNote,
@@ -54,6 +57,7 @@ export default function App() {
   });
 
   const searchRef = useRef<HTMLInputElement>(null);
+  const editorApiRef = useRef<EditorApi | null>(null);
   const revealRef = useRef(0);
   const [reveal, setReveal] = useState<{ line: number; token: number } | null>(
     null,
@@ -392,9 +396,77 @@ export default function App() {
     [openNote],
   );
 
+  // ── Menu bar ─────────────────────────────────────────────────────────────
+
+  // The handler outlives a render: the menu listener registers once, and the
+  // ref keeps it pointing at the current state.
+  const onMenu = useRef<(id: string) => void>(() => {});
+  onMenu.current = (id: string) => {
+    switch (id) {
+      case "new_note":
+        void addNote();
+        break;
+      case "save":
+        void flush();
+        break;
+      case "delete_note":
+        if (open) void removeOpen(open.meta.path);
+        break;
+      case "find":
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        break;
+      case "undo":
+        editorApiRef.current?.undo();
+        break;
+      case "redo":
+        editorApiRef.current?.redo();
+        break;
+      case "format_bold":
+        editorApiRef.current?.wrap("**", "**");
+        break;
+      case "format_italic":
+        editorApiRef.current?.wrap("*", "*");
+        break;
+      case "format_strike":
+        editorApiRef.current?.wrap("~~", "~~");
+        break;
+      case "format_code":
+        editorApiRef.current?.wrap("`", "`");
+        break;
+      case "format_link":
+        editorApiRef.current?.insertLink();
+        break;
+      case "mode_editor":
+        setMode("editor");
+        break;
+      case "mode_split":
+        setMode("split");
+        break;
+      case "mode_preview":
+        setMode("preview");
+        break;
+      default:
+        break;
+    }
+  };
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    const subscription = listen<string>("textone-menu", (event) => {
+      onMenu.current(event.payload);
+    });
+    return () => {
+      void subscription.then((unlisten) => unlisten());
+    };
+  }, []);
+
   // ── Keyboard ─────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    // In the app the menu bar owns every accelerator; the web view only sees
+    // them when there is no menu (a browser during development).
+    if (isDesktop) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return;
       const key = event.key.toLowerCase();
@@ -511,6 +583,7 @@ export default function App() {
           if (open) void renameOpen(open.meta.path, title);
         }}
         onToggleTask={toggleTask}
+        editorApiRef={editorApiRef}
       />
     </div>
   );
