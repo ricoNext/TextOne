@@ -1,0 +1,152 @@
+.note-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  background: var(--paper);
+}
+
+.note-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--header-height);
+  /* The title starts where the note's text starts. */
+  padding: 0 12px 0 var(--note-text-inset);
+}
+
+.note-header-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-note-title);
+  font-weight: 500;
+  line-height: var(--leading-ui);
+  color: var(--ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.note-body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.note-pane {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.note-split-divider {
+  flex: 0 0 1px;
+  background: var(--hairline-column);
+}
+
+.note-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--ink-3);
+}
+
+.note-empty .icon {
+  color: var(--brand);
+  opacity: 0.55;
+}
+
+.note-empty p {
+  margin: 0;
+  font-size: var(--fs-min);
+}
+
+/* A read-only file says so in the header, where the title cannot hide it. */
+.note-badge {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--ink-3);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* A failed save floats over the note: the text stays where it was, and the
+ * banner says why the disk does not have it. */
+.note-error {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(560px, calc(100% - 40px));
+  padding: 9px 12px;
+  border: 1px solid var(--hairline-column);
+  border-radius: var(--radius-floating);
+  background: var(--paper);
+  box-shadow: 0 6px 20px rgba(31, 30, 28, 0.12);
+}
+
+.note-error-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.note-error-action {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--brand);
+}
+
+.note-error-action:hover {
+  text-decoration: underline;
+}
+
+.note-error-dismiss {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ink-3);
+}
+
+.note-column {
+  position: relative;
+}
+
+/* Renaming in place: the field takes the title's own metrics so the header
+ * does not jump when the text becomes editable. */
+.note-header-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  margin-left: -6px;
+  border: 1px solid var(--hairline-column);
+  border-radius: var(--radius-field);
+  background: var(--field);
+  color: var(--ink-1);
+  font-size: var(--fs-note-title);
+  font-weight: 500;
+  line-height: var(--leading-ui);
+}

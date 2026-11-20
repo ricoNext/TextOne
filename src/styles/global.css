@@ -1,0 +1,165 @@
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink-1);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: var(--tracking);
+  /* No body scroll: the list and the note pane own their scrolling. */
+  overflow: hidden;
+  /* Text selection off by default, so dragging a row does not paint the UI
+   * blue; the editor and the preview turn it back on. */
+  user-select: none;
+  cursor: default;
+  -webkit-font-smoothing: auto;
+}
+
+button {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  cursor: default;
+}
+
+input {
+  font: inherit;
+  letter-spacing: inherit;
+  /* The page-level `user-select: none` would otherwise make the field's own
+   * text unselectable in WebKit. */
+  user-select: text;
+}
+
+:focus {
+  outline: none;
+}
+
+/* Every scroll container: overlay scrollbars, no gutter. */
+.scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scroll:hover {
+  scrollbar-color: var(--hairline-row) transparent;
+}
+
+.scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--hairline-row);
+}
+
+/* A glyph button: 28pt hit area, the icon tinted by --icon. Hover lifts the
+ * tint only — MiaoYan's toolbar buttons carry no plate. */
+.glyph-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-field);
+  color: var(--icon-color, var(--ink-3));
+  transition: color var(--motion-feedback) var(--ease-out),
+    background-color var(--motion-feedback) var(--ease-out);
+}
+
+.glyph-button:hover {
+  background: var(--field);
+}
+
+.glyph-button[data-active="true"] {
+  color: var(--brand);
+}
+
+.glyph-button svg,
+.glyph-button img {
+  width: 16px;
+  height: 16px;
+  display: block;
+  pointer-events: none;
+}
+
+/* The window drag strip: macOS needs the header band to move the window once
+ * the title bar is transparent. */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.drag-region button,
+.drag-region input,
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* The crash screen: readable, on paper, and it says the files are safe. */
+.crash {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 80px 24px;
+  user-select: text;
+}
+
+.crash h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--ink-1);
+}
+
+.crash-message {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-selection);
+  background: var(--code-bg);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.crash-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: var(--leading-ui);
+  color: var(--ink-3);
+}
+
+.crash-action {
+  padding: 6px 12px;
+  border-radius: var(--radius-field);
+  background: var(--brand);
+  color: var(--paper);
+  font-size: 13px;
+}

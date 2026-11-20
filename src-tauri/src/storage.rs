@@ -1,0 +1,608 @@
+//! The vault: a folder of `.md` files that TextOne reads and writes.
+//!
+//! The rules come from MiaoYan's file layer, minus its accidents:
+//! - a note is a plain `.md` file; the file name is the title, and a "/" in the
+//!   title is stored as ":" because macOS will not take a solidus in a name;
+//! - writes are atomic: the new bytes land in a temp file in the same folder
+//!   and are renamed over the note, so a crash never leaves half a file;
+//! - a write carries the modification time it was based on, and refuses when
+//!   the file has changed since, instead of overwriting someone else's edit;
+//! - a read-only note is read, never written.
+//!
+//! Attachment folders (`i`, `files`), hidden folders and `Trash` are not part
+//! of the tree, as in MiaoYan's sidebar.
+
+use std::fs;
+use std::io::Write;
+use std::path::{Component, Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde::Serialize;
+
+/// Folder names that hold attachments or caches rather than notes.
+const SKIPPED_DIRS: [&str; 4] = [".cache", "i", ".Trash", "files"];
+
+/// Deep enough for any real library, shallow enough that a symlink loop or a
+/// stray home directory cannot walk forever.
+const MAX_DEPTH: usize = 8;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderRow {
+    pub path: String,
+    pub name: String,
+    pub depth: u32,
+    pub has_children: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteMeta {
+    pub path: String,
+    pub title: String,
+    pub folder: String,
+    pub modified: i64,
+    pub created: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Vault {
+    pub root: String,
+    pub folders: Vec<FolderRow>,
+    pub notes: Vec<NoteMeta>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteBody {
+    pub body: String,
+    pub modified: i64,
+    /// True when the file cannot be written: a read-only file, or a folder the
+    /// process may not write to.
+    pub readonly: bool,
+}
+
+/// The library TextOne opens when nothing else has been chosen.
+///
+/// `~/Documents/TextOne` rather than MiaoYan's container: a separate app owns a
+/// separate folder, and the user can see it in Finder without hunting.
+pub fn default_root() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    PathBuf::from(home).join("Documents").join("TextOne")
+}
+
+/// Creates the library on first launch and drops a welcome note in it, so the
+/// window never opens on an empty list with no explanation.
+pub fn ensure_root(root: &Path) -> Result<(), String> {
+    fs::create_dir_all(root).map_err(|error| format!("无法创建笔记库：{error}"))?;
+    let welcome = root.join("欢迎使用 TextOne.md");
+    if !welcome.exists() {
+        let body = WELCOME;
+        fs::write(&welcome, body).map_err(|error| format!("无法写入欢迎笔记：{error}"))?;
+    }
+    Ok(())
+}
+
+pub fn scan(root: &Path) -> Result<Vault, String> {
+    if !root.is_dir() {
+        return Err(format!("笔记库不存在：{}", root.display()));
+    }
+
+    let mut folders = Vec::new();
+    let mut notes = Vec::new();
+    walk(root, root, 0, &mut folders, &mut notes)?;
+
+    // MiaoYan sorts the sidebar by localized name, case-insensitively.
+    folders.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    notes.sort_by(|a, b| b.modified.cmp(&a.modified));
+
+    Ok(Vault {
+        root: root.display().to_string(),
+        folders,
+        notes,
+    })
+}
+
+fn walk(
+    root: &Path,
+    dir: &Path,
+    depth: usize,
+    folders: &mut Vec<FolderRow>,
+    notes: &mut Vec<NoteMeta>,
+) -> Result<(), String> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        // A folder that vanishes or is unreadable mid-scan must not fail the
+        // whole library: the rest of the tree is still worth showing.
+        Err(_) => return Ok(()),
+    };
+
+    let mut children: Vec<PathBuf> = Vec::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = match path.file_name().and_then(|name| name.to_str()) {
+            Some(name) => name.to_string(),
+            None => continue,
+        };
+        if name.starts_with('.') {
+            continue;
+        }
+
+        let metadata = match entry.metadata() {
+            Ok(metadata) => metadata,
+            Err(_) => continue,
+        };
+
+        if metadata.is_dir() {
+            if SKIPPED_DIRS.contains(&name.as_str()) || depth >= MAX_DEPTH {
+                continue;
+            }
+            children.push(path);
+            continue;
+        }
+
+        if !metadata.is_file() || !is_markdown(&name) {
+            continue;
+        }
+
+        let modified = millis(metadata.modified().ok());
+        let created = millis(metadata.created().ok()).min(modified);
+        notes.push(NoteMeta {
+            path: path.display().to_string(),
+            title: title_of(&path),
+            folder: dir.display().to_string(),
+            modified,
+            created,
+        });
+    }
+
+    children.sort_by(|a, b| {
+        name_of(a)
+            .to_lowercase()
+            .cmp(&name_of(b).to_lowercase())
+    });
+
+    for child in children {
+        let has_children = has_subfolder(&child);
+        folders.push(FolderRow {
+            path: child.display().to_string(),
+            name: name_of(&child),
+            depth: depth as u32,
+            has_children,
+        });
+        walk(root, &child, depth + 1, folders, notes)?;
+    }
+
+    let _ = root;
+    Ok(())
+}
+
+fn has_subfolder(dir: &Path) -> bool {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(_) => return false,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = name_of(&path);
+        if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false)
+            && !name.starts_with('.')
+            && !SKIPPED_DIRS.contains(&name.as_str())
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn is_markdown(name: &str) -> bool {
+    name.to_lowercase().ends_with(".md")
+}
+
+fn name_of(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// The note's title is its file stem, with the stored ":" put back, as
+/// `Note.getTitleWithoutLabel` does.
+pub fn title_of(path: &Path) -> String {
+    let stem = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or_default();
+    stem.replace(':', "/")
+}
+
+pub fn read(path: &Path) -> Result<NoteBody, String> {
+    let bytes = fs::read(path).map_err(|error| format!("无法读取笔记：{error}"))?;
+    // Invalid UTF-8 is shown with replacement characters, as `NoteText.decode`
+    // does; the caller then refuses to write the damaged text back.
+    let body = String::from_utf8_lossy(&bytes).to_string();
+    let metadata = fs::metadata(path).map_err(|error| format!("无法读取笔记信息：{error}"))?;
+    Ok(NoteBody {
+        body,
+        modified: millis(metadata.modified().ok()),
+        readonly: !is_writable(path, &metadata),
+    })
+}
+
+/// Writes `body` over `path` atomically, refusing when the file changed since
+/// `expected_modified` (0 means "no check", used for a brand-new note).
+pub fn write(path: &Path, body: &str, expected_modified: i64) -> Result<i64, String> {
+    let metadata = fs::metadata(path).map_err(|error| format!("笔记不存在：{error}"))?;
+    if !is_writable(path, &metadata) {
+        return Err("这篇笔记是只读的，没有写入".into());
+    }
+
+    let current = millis(metadata.modified().ok());
+    if expected_modified != 0 && current != expected_modified {
+        return Err("笔记在磁盘上被改过，已停止写入以免覆盖".into());
+    }
+
+    let parent = path
+        .parent()
+        .ok_or_else(|| "笔记路径没有上级目录".to_string())?;
+    let name = name_of(path);
+    let temp = parent.join(format!(".{name}.textone-tmp"));
+
+    let write_result = (|| -> std::io::Result<()> {
+        let mut file = fs::File::create(&temp)?;
+        file.write_all(body.as_bytes())?;
+        // The rename is only atomic once the bytes are on the platter.
+        file.sync_all()?;
+        Ok(())
+    })();
+
+    if let Err(error) = write_result {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("无法写入笔记：{error}"));
+    }
+
+    if let Err(error) = fs::rename(&temp, path) {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("无法保存笔记：{error}"));
+    }
+
+    let modified = fs::metadata(path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .map(|time| millis(Some(time)))
+        .unwrap_or_else(|| millis(Some(SystemTime::now())));
+    Ok(modified)
+}
+
+/// Creates an empty note in `folder`, picking a name that does not collide.
+pub fn create(folder: &Path, title: &str) -> Result<NoteMeta, String> {
+    if !folder.is_dir() {
+        return Err(format!("文件夹不存在：{}", folder.display()));
+    }
+    let clean = if title.trim().is_empty() {
+        "无标题".to_string()
+    } else {
+        title.trim().to_string()
+    }
+    .replace('/', ":");
+
+    let mut candidate = folder.join(format!("{clean}.md"));
+    let mut counter = 2;
+    while candidate.exists() {
+        candidate = folder.join(format!("{clean} {counter}.md"));
+        counter += 1;
+        if counter > 999 {
+            return Err("同名笔记太多，换个标题吧".into());
+        }
+    }
+
+    fs::write(&candidate, "").map_err(|error| format!("无法新建笔记：{error}"))?;
+    let metadata = fs::metadata(&candidate).map_err(|error| format!("无法读取新笔记：{error}"))?;
+    let modified = millis(metadata.modified().ok());
+
+    Ok(NoteMeta {
+        path: candidate.display().to_string(),
+        title: title_of(&candidate),
+        folder: folder.display().to_string(),
+        modified,
+        created: modified,
+    })
+}
+
+/// Renames a note: the title is the file name, so editing the title moves the
+/// file. A ":" stands in for the "/" a title may contain.
+pub fn rename(path: &Path, title: &str) -> Result<PathBuf, String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "笔记路径没有上级目录".to_string())?;
+    let clean = title.trim().replace('/', ":");
+    if clean.is_empty() {
+        return Err("标题不能为空".into());
+    }
+
+    let mut candidate = parent.join(format!("{clean}.md"));
+    if candidate == path {
+        return Ok(candidate);
+    }
+    let mut counter = 2;
+    while candidate.exists() {
+        candidate = parent.join(format!("{clean} {counter}.md"));
+        counter += 1;
+        if counter > 999 {
+            return Err("同名笔记太多，换个标题吧".into());
+        }
+    }
+
+    fs::rename(path, &candidate).map_err(|error| format!("无法重命名：{error}"))?;
+    Ok(candidate)
+}
+
+/// Moves a note to the user's Trash, where Finder can put it back. Deleting
+/// outright is not offered: a mis-click must stay recoverable.
+pub fn trash(path: &Path) -> Result<(), String> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    trash_into(path, &PathBuf::from(home).join(".Trash"))
+}
+
+/// The body of `trash`, with the destination passed in so a test never touches
+/// the real Trash.
+pub fn trash_into(path: &Path, trash_dir: &Path) -> Result<(), String> {
+    let name = name_of(path);
+    let mut target = trash_dir.join(&name);
+
+    // The Trash may already hold a file with this name; the Finder suffixes
+    // rather than replacing.
+    let mut counter = 1;
+    while target.exists() {
+        let stem = path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or("笔记");
+        target = trash_dir.join(format!("{stem} {counter}.md"));
+        counter += 1;
+        if counter > 999 {
+            return Err("废纸篓里同名文件太多".into());
+        }
+    }
+
+    fs::rename(path, &target).map_err(|error| format!("无法移到废纸篓：{error}"))
+}
+
+fn is_writable(path: &Path, metadata: &fs::Metadata) -> bool {
+    if metadata.permissions().readonly() {
+        return false;
+    }
+    // macOS reports the mode bit; a file the user cannot write is read-only
+    // even when the flag says otherwise.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o200 == 0 {
+            return false;
+        }
+    }
+    // A writable file in a folder the process cannot write cannot be replaced
+    // by the rename, so treat the folder as the authority.
+    match path.parent() {
+        Some(parent) => {
+            let probe = parent.join(".textone-write-probe");
+            match fs::File::create(&probe) {
+                Ok(_) => {
+                    let _ = fs::remove_file(&probe);
+                    true
+                }
+                Err(_) => false,
+            }
+        }
+        None => false,
+    }
+}
+
+fn millis(time: Option<SystemTime>) -> i64 {
+    time.and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Rejects a path outside the library, so a command can never be talked into
+/// writing somewhere else.
+pub fn within(root: &Path, candidate: &Path) -> bool {
+    let root = normalize(root);
+    let candidate = normalize(candidate);
+    candidate.starts_with(&root)
+}
+
+fn normalize(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::CurDir => {}
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
+const WELCOME: &str = r#"# 欢迎使用 TextOne
+
+这是一个把 Markdown 存成本地文件的编辑器。你的笔记就是这个文件夹里的 `.md` 文件，
+用任何别的工具都能打开。
+
+## 试试这些
+
+- [ ] 按 ⌘N 新建一篇
+- [ ] 在这里打字，右侧看排版
+- [ ] 按 ⌘S 立刻保存（平时会自动保存）
+
+> 写作工具能做的只有一件事：别打断。
+
+## 语法都在
+
+| 能力 | 说明 |
+|---|---|
+| 表格 | 像上面这张 |
+| 任务 | 上面那两个方框 |
+| 代码 | 下面这段 |
+
+```ts
+const note = "Markdown 存本地";
+```
+"#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, SystemTime};
+
+    fn scratch(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("textone-{name}-{nanos}"));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn scan_reads_folders_and_skips_attachments() {
+        let root = scratch("scan");
+        fs::create_dir_all(root.join("笔记/子目录")).unwrap();
+        fs::create_dir_all(root.join("i")).unwrap();
+        fs::create_dir_all(root.join(".cache")).unwrap();
+        fs::write(root.join("根笔记.md"), "# 一").unwrap();
+        fs::write(root.join("笔记/嵌套.md"), "# 二").unwrap();
+        fs::write(root.join("笔记/子目录/更深.md"), "# 三").unwrap();
+        fs::write(root.join("i/图片.md"), "不该出现").unwrap();
+        fs::write(root.join(".cache/缓存.md"), "不该出现").unwrap();
+        fs::write(root.join("笔记/说明.txt"), "不是笔记").unwrap();
+
+        let vault = scan(&root).unwrap();
+        let titles: Vec<_> = vault.notes.iter().map(|n| n.title.as_str()).collect();
+        assert_eq!(titles.len(), 3, "{titles:?}");
+        assert!(titles.contains(&"根笔记"));
+        assert!(titles.contains(&"嵌套"));
+        assert!(titles.contains(&"更深"));
+
+        let names: Vec<_> = vault.folders.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, vec!["子目录", "笔记"], "子目录排在笔记前面？{names:?}");
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn write_is_atomic_and_bumps_the_time() {
+        let root = scratch("write");
+        let note = root.join("a.md");
+        fs::write(&note, "旧").unwrap();
+        let before = read(&note).unwrap();
+
+        // Coarse file systems stamp whole seconds; move the clock on before
+        // expecting a different value.
+        std::thread::sleep(Duration::from_millis(20));
+        let after = write(&note, "新内容", before.modified).unwrap();
+
+        assert_eq!(read(&note).unwrap().body, "新内容");
+        assert!(after >= before.modified);
+        // The temp file must not survive the rename.
+        assert!(!root.join(".a.md.textone-tmp").exists());
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn write_refuses_a_stale_buffer() {
+        let root = scratch("conflict");
+        let note = root.join("b.md");
+        fs::write(&note, "第一版").unwrap();
+        let seen = read(&note).unwrap();
+
+        std::thread::sleep(Duration::from_millis(20));
+        // Someone else writes the file after we read it.
+        write(&note, "别人写的", seen.modified).unwrap();
+
+        let result = write(&note, "我的草稿", seen.modified);
+        assert!(result.is_err(), "过期缓冲区不该写进去");
+        assert_eq!(read(&note).unwrap().body, "别人写的");
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_refuses_a_read_only_note() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = scratch("readonly");
+        let note = root.join("c.md");
+        fs::write(&note, "不可改").unwrap();
+        fs::set_permissions(&note, fs::Permissions::from_mode(0o444)).unwrap();
+
+        let loaded = read(&note).unwrap();
+        assert!(loaded.readonly, "只读文件要标出来");
+        assert!(write(&note, "改一下", loaded.modified).is_err());
+
+        fs::set_permissions(&note, fs::Permissions::from_mode(0o644)).ok();
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn create_picks_a_free_name() {
+        let root = scratch("create");
+        fs::write(root.join("无标题.md"), "").unwrap();
+        let meta = create(&root, "无标题").unwrap();
+        assert!(meta.path.ends_with("无标题 2.md"), "{}", meta.path);
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn rename_moves_the_file_and_keeps_the_title() {
+        let root = scratch("rename");
+        let note = root.join("旧标题.md");
+        fs::write(&note, "内容").unwrap();
+        fs::write(root.join("新标题.md"), "占位").unwrap();
+
+        // A taken name gets a suffix rather than overwriting the other note.
+        let renamed = rename(&note, "新标题").unwrap();
+        assert!(renamed.ends_with("新标题 2.md"), "{}", renamed.display());
+        assert_eq!(read(&renamed).unwrap().body, "内容");
+        assert_eq!(read(&root.join("新标题.md")).unwrap().body, "占位");
+
+        // A "/" in the title is stored as ":".
+        let with_slash = rename(&renamed, "a/b").unwrap();
+        assert_eq!(title_of(&with_slash), "a/b");
+        assert!(with_slash.file_name().unwrap().to_str().unwrap().contains(':'));
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn trash_moves_the_note_aside() {
+        let root = scratch("trash");
+        let bin = scratch("bin");
+        let note = root.join("丢掉.md");
+        fs::write(&note, "还在").unwrap();
+
+        trash_into(&note, &bin).unwrap();
+        assert!(!note.exists());
+        assert_eq!(fs::read_to_string(bin.join("丢掉.md")).unwrap(), "还在");
+
+        // The same name twice must not overwrite what is already in the bin.
+        fs::write(&note, "第二篇").unwrap();
+        trash_into(&note, &bin).unwrap();
+        assert_eq!(fs::read_to_string(bin.join("丢掉 1.md")).unwrap(), "第二篇");
+
+        fs::remove_dir_all(&root).ok();
+        fs::remove_dir_all(&bin).ok();
+    }
+
+    #[test]
+    fn paths_outside_the_library_are_rejected() {
+        let root = PathBuf::from("/tmp/typed-notes");
+        assert!(within(&root, &root.join("a/b.md")));
+        assert!(!within(&root, Path::new("/tmp/typed-notes-evil/a.md")));
+        assert!(!within(&root, Path::new("/tmp/typed-notes/../../etc/passwd")));
+    }
+}

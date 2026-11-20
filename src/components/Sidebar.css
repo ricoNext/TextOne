@@ -1,0 +1,111 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  background: var(--paper);
+}
+
+/* The traffic lights float over this band, so the leading 78pt stays empty and
+ * only the buttons reach into it. */
+.sidebar-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: var(--header-height);
+  padding: 0 10px 0 var(--traffic-lights-inset);
+}
+
+.sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 8px 10px;
+}
+
+/* 36 tall with 3 above it: the brand sits just under the header, 9.5 below it
+ * to the first row, as the shell's LazyVStack spaces them. */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--brand-row-height);
+  margin-top: 3px;
+  padding: 0 8px;
+  color: var(--brand);
+}
+
+.sidebar-wordmark {
+  font-family: var(--font-brand);
+  font-size: 14px;
+  line-height: 1;
+  /* MiaoYan nudges the wordmark down so its ink centres on the bird's. */
+  transform: translateY(2px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-gap {
+  height: 9.5px;
+}
+
+.sidebar-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--folder-row-height);
+  padding-right: 8px;
+  border-radius: var(--radius-selection);
+  color: var(--ink-1);
+  transition: background-color var(--motion-change) var(--ease-out);
+}
+
+.sidebar-row[data-selected] {
+  background: var(--selection-sidebar);
+}
+
+.sidebar-row .icon {
+  color: var(--ink-3);
+}
+
+.sidebar-row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-sidebar);
+  line-height: var(--leading-ui);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-chevron {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 22px;
+  flex: 0 0 auto;
+  color: var(--ink-3);
+  border-radius: var(--radius-field);
+  transition: transform var(--motion-change) var(--ease-out);
+}
+
+.sidebar-chevron[data-expanded] {
+  transform: rotate(90deg);
+}
+
+.sidebar-chevron:hover {
+  background: var(--field);
+}

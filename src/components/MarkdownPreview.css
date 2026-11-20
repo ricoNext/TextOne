@@ -1,0 +1,162 @@
+/* A close approximation of DownView's light theme, so the split view can be
+ * judged before the island lands. The real preview brings its own sheet; when
+ * it does, this file and MarkdownPreview.tsx both go. */
+
+.md-preview {
+  height: 100%;
+  min-height: 0;
+  user-select: text;
+}
+
+.md-body {
+  padding: 12px 29px 96px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-preview);
+  line-height: var(--leading-prose);
+  letter-spacing: var(--tracking);
+  color: var(--syn-body);
+  word-wrap: break-word;
+}
+
+.md-body > *:first-child {
+  margin-top: 0;
+}
+
+.md-body p {
+  margin: 0 0 1em;
+}
+
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4,
+.md-body h5,
+.md-body h6 {
+  margin: 1.6em 0 0.6em;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink-1);
+}
+
+.md-body h1 {
+  font-size: 1.76em;
+}
+
+.md-body h2 {
+  font-size: 1.41em;
+}
+
+.md-body h3 {
+  font-size: 1.18em;
+}
+
+.md-body h4,
+.md-body h5,
+.md-body h6 {
+  font-size: 1em;
+}
+
+.md-body h1:first-child {
+  margin-top: 0;
+}
+
+.md-body ul,
+.md-body ol {
+  margin: 0 0 1em;
+  padding-left: 1.6em;
+}
+
+.md-body li {
+  margin: 0.25em 0;
+}
+
+.md-body li[data-task] {
+  list-style: none;
+  margin-left: -1.3em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+}
+
+.md-body li[data-task] input {
+  margin: 0;
+  accent-color: var(--brand);
+}
+
+.md-body blockquote {
+  margin: 0 0 1em;
+  padding: 0.1em 0 0.1em 1em;
+  border-left: 3px solid var(--quote-bar);
+  color: var(--ink-2);
+}
+
+.md-body blockquote p {
+  margin: 0;
+}
+
+.md-body code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  background: var(--code-bg);
+}
+
+.md-body pre {
+  margin: 0 0 1em;
+  padding: 14px 16px;
+  border-radius: var(--radius-selection);
+  background: var(--code-bg);
+  overflow-x: auto;
+}
+
+.md-body pre code {
+  padding: 0;
+  background: none;
+  font-size: 0.86em;
+  line-height: 1.5;
+}
+
+.md-body hr {
+  margin: 1.8em 0;
+  border: 0;
+  border-top: 1px solid var(--hairline-column);
+}
+
+.md-body table {
+  width: 100%;
+  margin: 0 0 1em;
+  border-collapse: collapse;
+  font-size: 0.94em;
+}
+
+.md-body th,
+.md-body td {
+  padding: 7px 10px;
+  border: 1px solid var(--hairline-row);
+  text-align: left;
+}
+
+.md-body th {
+  background: var(--code-bg);
+  font-weight: 600;
+}
+
+.md-body a {
+  color: var(--syn-link);
+  text-decoration: none;
+}
+
+.md-body a:hover {
+  text-decoration: underline;
+}
+
+.md-body strong {
+  font-weight: 600;
+  color: var(--ink-1);
+}
+
+.md-body img {
+  max-width: 100%;
+  border-radius: var(--radius-selection);
+}

@@ -1,0 +1,148 @@
+/* TextOne design tokens.
+ *
+ * Every value here is traced to MiaoYan 0f348ca9 — Theme.swift, ShellPalette.swift,
+ * ShellRootView.swift and the storyboard. Components read variables only; a hex
+ * literal in a component stylesheet is a bug. See docs/03-ui-parity-spec.md.
+ */
+
+:root {
+  /* ── Paper and ink ─────────────────────────────────────────────── */
+  --paper: #fdfcf9;
+  --ink-1: #363433; /* titles, body */
+  --ink-2: #504e49; /* secondary labels */
+  --ink-3: #6b6a64; /* dates, icons, placeholders */
+  --brand: #1c5d33;
+
+  /* ── Surfaces ──────────────────────────────────────────────────── */
+  --selection-sidebar: #e8e6dc;
+  --selection-list: #efede4;
+  --field: rgba(31, 30, 28, 0.045);
+  --field-hover: rgba(31, 30, 28, 0.09);
+  --code-bg: #f5f4ed;
+  --quote-bar: #ddd9cd;
+
+  /* ── Lines ─────────────────────────────────────────────────────── */
+  --hairline-column: rgba(31, 30, 28, 0.07);
+  --hairline-row: rgba(31, 30, 28, 0.13);
+
+  /* ── Editor syntax ─────────────────────────────────────────────── */
+  --syn-heading: #5e3db3;
+  --syn-markup: #7a7872;
+  --syn-strong: #9a7400;
+  --syn-link: #24837b;
+  --syn-body: #403e3c;
+  --syn-code: #b89d4b;
+
+  /* ── Type ──────────────────────────────────────────────────────── */
+  --font-ui: -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+  /* MiaoYan's wordmark falls back to Charter for a Latin name. */
+  --font-brand: "Charter", "Charter-Roman", "Iowan Old Style", Georgia, serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+
+  --fs-sidebar: 14px;
+  --fs-list-title: 14px;
+  --fs-list-date: 12px;
+  --fs-note-title: 17px;
+  --fs-editor: 16px;
+  --fs-preview: 16px;
+  --fs-min: 12px;
+
+  --tracking: 0.02em;
+  --leading-ui: 1.45;
+  --leading-prose: 1.6;
+
+  /* ── Geometry ──────────────────────────────────────────────────── */
+  --header-height: 52px;
+  --traffic-lights-inset: 78px;
+  --beside-traffic-lights: 92px;
+  --note-text-inset: 29px;
+
+  --sidebar-width: 170px;
+  --sidebar-min: 138px;
+  --sidebar-max: 280px;
+  --sidebar-collapse-snap: 86px;
+
+  --list-width: 280px;
+  --list-min: 220px;
+  --list-collapse-snap: 180px;
+
+  --brand-row-height: 36px;
+  --folder-row-height: 32px;
+  --note-row-height: 52px;
+
+  --radius-selection: 8px;
+  --radius-field: 8px;
+  --radius-floating: 10px;
+
+  --pill-inset-h: 6px;
+  --pill-inset-v: 3px;
+  --note-pill-inset-h: 8px;
+  --note-pill-inset-v: 2px;
+
+  /* ── Motion ────────────────────────────────────────────────────── */
+  --motion-feedback: 120ms;
+  --motion-change: 250ms;
+  --motion-fade: 80ms;
+  --ease-out: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  color-scheme: light;
+}
+
+/* Dark keeps the same roles. MiaoYan's dark paper is #1E1D1B; the selection
+ * plates are solid there rather than white at 7%, which goes grey on paper. */
+:root[data-theme="dark"] {
+  --paper: #1e1d1b;
+  --ink-1: #f2f0ea;
+  --ink-2: #b5b1a7;
+  --ink-3: #8e8b83;
+  --brand: #54c59f;
+
+  --selection-sidebar: #302f2d;
+  --selection-list: #2e2d2b;
+  --field: rgba(255, 255, 255, 0.06);
+  --field-hover: rgba(255, 255, 255, 0.09);
+  --code-bg: #282724;
+  --quote-bar: #3a3835;
+
+  --hairline-column: rgba(255, 255, 255, 0.07);
+  --hairline-row: rgba(255, 255, 255, 0.065);
+
+  --syn-heading: #8e6ad9;
+  --syn-markup: #8e8b83;
+  --syn-strong: #daae76;
+  --syn-link: #58d8ad;
+  --syn-body: #d5d4d6;
+  --syn-code: #be9868;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1e1d1b;
+    --ink-1: #f2f0ea;
+    --ink-2: #b5b1a7;
+    --ink-3: #8e8b83;
+    --brand: #54c59f;
+
+    --selection-sidebar: #302f2d;
+    --selection-list: #2e2d2b;
+    --field: rgba(255, 255, 255, 0.06);
+    --field-hover: rgba(255, 255, 255, 0.09);
+    --code-bg: #282724;
+  --quote-bar: #3a3835;
+
+    --hairline-column: rgba(255, 255, 255, 0.07);
+    --hairline-row: rgba(255, 255, 255, 0.065);
+
+    --syn-heading: #8e6ad9;
+    --syn-markup: #8e8b83;
+    --syn-strong: #daae76;
+    --syn-link: #58d8ad;
+    --syn-body: #d5d4d6;
+    --syn-code: #be9868;
+
+    color-scheme: dark;
+  }
+}

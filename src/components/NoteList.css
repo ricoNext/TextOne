@@ -1,0 +1,143 @@
+.note-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  background: var(--paper);
+}
+
+.note-list-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: var(--header-height);
+  /* The field starts 13 from the column line and ends where the 20pt new-note
+   * button begins, which sits 12 from the trailing edge. */
+  padding: 0 12px 0 13px;
+}
+
+/* 30pt tall, fully rounded, one hairline border in every state: focus shows
+ * through the caret, never through a ring. */
+.note-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline-column);
+  border-radius: 15px;
+  background: var(--paper);
+  color: var(--ink-1);
+  font-size: 12px;
+  line-height: 30px;
+  appearance: none;
+  outline: none;
+}
+
+.note-search::placeholder {
+  color: var(--ink-3);
+}
+
+.note-search::-webkit-search-cancel-button {
+  display: none;
+}
+
+.note-new {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: var(--ink-3);
+  transition: color var(--motion-feedback) var(--ease-out);
+}
+
+.note-new:hover {
+  color: var(--ink-1);
+}
+
+.note-list-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-bottom: 10px;
+}
+
+.note-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* A 52pt row holds a card inset 8 horizontally and 2 vertically, so the
+ * selection plate reads as a card rather than a band. The card's own padding
+ * puts the title back at 20 from the column edge and 9.5 from the row top. */
+.note-row {
+  position: relative;
+  height: var(--note-row-height);
+  padding: var(--note-pill-inset-v) var(--note-pill-inset-h);
+}
+
+.note-row-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  padding: 7.5px 8px 5.5px 12px;
+  border-radius: var(--radius-selection);
+  transition: background-color var(--motion-change) var(--ease-out);
+}
+
+.note-row[data-selected] .note-row-card {
+  background: var(--selection-list);
+}
+
+.note-row-title {
+  font-size: var(--fs-list-title);
+  line-height: 17px;
+  color: var(--ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 14px;
+  color: var(--ink-3);
+}
+
+.note-row-date {
+  font-size: var(--fs-list-date);
+  line-height: 14px;
+}
+
+.note-row[data-divider]::after {
+  content: "";
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+  height: 1px;
+  background: var(--hairline-row);
+}
+
+.note-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 96px;
+  color: var(--ink-3);
+}
+
+.note-list-empty .icon {
+  color: var(--brand);
+  opacity: 0.7;
+}
+
+.note-list-empty p {
+  margin: 0;
+  font-size: var(--fs-min);
+  color: var(--ink-3);
+}

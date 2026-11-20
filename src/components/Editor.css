@@ -1,0 +1,48 @@
+.editor-host {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  user-select: text;
+  /* The editor owns the caret; a click in the text must not drag the window. */
+  -webkit-app-region: no-drag;
+}
+
+.editor-host .cm-editor {
+  height: 100%;
+}
+
+.editor-host .cm-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.editor-host .cm-scroller:hover {
+  scrollbar-color: var(--hairline-row) transparent;
+}
+
+.editor-host .cm-scroller::-webkit-scrollbar {
+  width: 8px;
+}
+
+.editor-host .cm-scroller::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.editor-host .cm-scroller:hover::-webkit-scrollbar-thumb {
+  background: var(--hairline-row);
+}
+
+/* The placeholder sits where the text would start, in the third grey. */
+.editor-host .cm-placeholder {
+  color: var(--ink-3);
+  font-style: normal;
+}
+
+/* Keep the composition underline from the system; only the panel behind the
+ * candidate window follows the paper tone. */
+.editor-host .cm-tooltip {
+  background: var(--paper);
+  border: 1px solid var(--hairline-column);
+  border-radius: var(--radius-field);
+}
