@@ -61,6 +61,15 @@ pub fn vault_path(state: State<'_, VaultState>) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn search_notes(
+    state: State<'_, VaultState>,
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<crate::storage::SearchHit>, String> {
+    storage::search(&state.root()?, &query, limit.unwrap_or(50))
+}
+
+#[tauri::command]
 pub fn note_read(state: State<'_, VaultState>, path: String) -> Result<NoteBody, String> {
     storage::read(&state.check(&path)?)
 }

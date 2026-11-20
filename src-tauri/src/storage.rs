@@ -311,6 +311,91 @@ pub fn create(folder: &Path, title: &str) -> Result<NoteMeta, String> {
     })
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchHit {
+    pub path: String,
+    pub title: String,
+    pub folder: String,
+    pub modified: i64,
+    /// The line the match sits on, trimmed for the list.
+    pub snippet: String,
+    pub line: u32,
+}
+
+/// Full-text search across the library. Notes are small and few; reading them
+/// on a keystroke beats keeping an index in step with files edited by hand.
+pub fn search(root: &Path, query: &str, limit: usize) -> Result<Vec<SearchHit>, String> {
+    let needle = query.trim().to_lowercase();
+    if needle.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let vault = scan(root)?;
+    let mut hits: Vec<SearchHit> = Vec::new();
+
+    for note in vault.notes {
+        if hits.len() >= limit {
+            break;
+        }
+        if note.title.to_lowercase().contains(&needle) {
+            hits.push(SearchHit {
+                path: note.path,
+                title: note.title,
+                folder: note.folder,
+                modified: note.modified,
+                snippet: String::new(),
+                line: 1,
+            });
+            continue;
+        }
+
+        let body = match fs::read_to_string(&note.path) {
+            Ok(body) => body,
+            // A file that cannot be read as UTF-8 is skipped rather than
+            // shown with mangled text.
+            Err(_) => continue,
+        };
+        for (index, line) in body.lines().enumerate() {
+            if line.to_lowercase().contains(&needle) {
+                hits.push(SearchHit {
+                    path: note.path,
+                    title: note.title,
+                    folder: note.folder,
+                    modified: note.modified,
+                    snippet: excerpt(line, &needle),
+                    line: index as u32 + 1,
+                });
+                break;
+            }
+        }
+    }
+
+    Ok(hits)
+}
+
+/// The matched line, cut to a readable width around the match.
+fn excerpt(line: &str, needle: &str) -> String {
+    let collapsed = line.split_whitespace().collect::<Vec<_>>().join(" ");
+    let lower = collapsed.to_lowercase();
+    let Some(position) = lower.find(needle) else {
+        return truncate(&collapsed, 120);
+    };
+    // Two short lines of context, so the match is not at the very edge.
+    let start = collapsed[..position].char_indices().rev().nth(20).map(|(i, _)| i).unwrap_or(0);
+    let cut = &collapsed[start..];
+    truncate(cut, 120)
+}
+
+fn truncate(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    let mut out: String = text.chars().take(max_chars).collect();
+    out.push('…');
+    out
+}
+
 /// Renames a note: the title is the file name, so editing the title moves the
 /// file. A ":" stands in for the "/" a title may contain.
 pub fn rename(path: &Path, title: &str) -> Result<PathBuf, String> {
@@ -596,6 +681,33 @@ mod tests {
 
         fs::remove_dir_all(&root).ok();
         fs::remove_dir_all(&bin).ok();
+    }
+
+    #[test]
+    fn search_finds_a_title_and_a_line() {
+        let root = scratch("search");
+        fs::create_dir_all(root.join("写作")).unwrap();
+        fs::write(
+            root.join("写作/关于慢.md"),
+            "写字这件事，快不起来。\n工具能做的只有一件事：别打断。\n",
+        )
+        .unwrap();
+        fs::write(root.join("Writing.md"), "Nothing here\n").unwrap();
+
+        let by_title = search(&root, "关于", 10).unwrap();
+        assert_eq!(by_title.len(), 1, "{by_title:?}");
+        assert_eq!(by_title[0].title, "关于慢");
+
+        let by_body = search(&root, "别打断", 10).unwrap();
+        assert_eq!(by_body.len(), 1);
+        assert_eq!(by_body[0].line, 2);
+        assert!(by_body[0].snippet.contains("别打断"), "{}", by_body[0].snippet);
+
+        // Case does not matter, and the limit is honoured.
+        assert_eq!(search(&root, "NOTHING", 10).unwrap().len(), 1);
+        assert_eq!(search(&root, "e", 1).unwrap().len(), 1);
+
+        fs::remove_dir_all(&root).ok();
     }
 
     #[test]

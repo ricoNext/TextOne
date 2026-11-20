@@ -107,9 +107,13 @@
   color: var(--ink-3);
 }
 
-.note-row-date {
+.note-row-detail {
+  min-width: 0;
   font-size: var(--fs-list-date);
   line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .note-row[data-divider]::after {

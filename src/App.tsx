@@ -8,10 +8,12 @@ import {
   openVault,
   readNote,
   renameNote,
+  searchNotes,
   rescanVault,
   trashNote,
   writeNote,
   type NoteMeta,
+  type SearchHit,
   type Vault,
 } from "./lib/vault";
 import type { EditorMode, SidebarRow } from "./types";
@@ -41,6 +43,8 @@ export default function App() {
   const [listWidth, setListWidth] = useState(280);
   const [resizing, setResizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchHit[]>([]);
   const [lang] = useState<Lang>("zh");
   const [dark, setDark] = useState(() => {
     const forced = new URLSearchParams(window.location.search).get("theme");
@@ -48,6 +52,12 @@ export default function App() {
     if (forced === "light") return false;
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
+
+  const searchRef = useRef<HTMLInputElement>(null);
+  const revealRef = useRef(0);
+  const [reveal, setReveal] = useState<{ line: number; token: number } | null>(
+    null,
+  );
 
   const timer = useRef<number | null>(null);
   const draft = useRef<{ path: string; body: string } | null>(null);
@@ -135,6 +145,30 @@ export default function App() {
     [],
   );
 
+  // ── Search ───────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    const handle = window.setTimeout(() => {
+      searchNotes(trimmed)
+        .then((hits) => {
+          if (!cancelled) setResults(hits);
+        })
+        .catch((reason) => {
+          if (!cancelled) setError(String(reason));
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [query]);
+
   // ── Notes ────────────────────────────────────────────────────────────────
 
   const openNote = useCallback(async (meta: NoteMeta) => {
@@ -199,6 +233,23 @@ export default function App() {
       });
     },
     [scheduleSave],
+  );
+
+  const openResult = useCallback(
+    async (hit: SearchHit) => {
+      const meta =
+        vault?.notes.find((note) => note.path === hit.path) ?? {
+          path: hit.path,
+          title: hit.title,
+          folder: hit.folder,
+          modified: hit.modified,
+          created: hit.modified,
+        };
+      await openNote(meta);
+      revealRef.current += 1;
+      setReveal({ line: hit.line, token: revealRef.current });
+    },
+    [vault, openNote],
   );
 
   const toggleTask = useCallback(
@@ -359,6 +410,10 @@ export default function App() {
       } else if (key === "\\") {
         event.preventDefault();
         setMode((current) => (current === "split" ? "editor" : "split"));
+      } else if (key === "f") {
+        event.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
       } else if (key === "backspace") {
         const current = openRef.current;
         if (!current) return;
@@ -409,12 +464,17 @@ export default function App() {
 
       <NoteList
         notes={visibleNotes}
+        results={results}
+        query={query}
         selectedPath={open?.meta.path ?? null}
         lang={lang}
+        searchRef={searchRef}
         onSelect={(path) => {
           const meta = visibleNotes.find((note) => note.path === path);
           if (meta) void openNote(meta);
         }}
+        onOpenResult={(hit) => void openResult(hit)}
+        onQueryChange={setQuery}
         onNewNote={() => void addNote()}
       />
 
@@ -442,6 +502,7 @@ export default function App() {
         lang={lang}
         dark={dark}
         error={error}
+        reveal={reveal}
         onChangeBody={changeBody}
         onModeChange={setMode}
         onRetrySave={() => void flush()}

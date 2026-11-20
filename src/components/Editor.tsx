@@ -90,11 +90,15 @@ export function Editor({
   onChange,
   onScrollLine,
   apiRef,
+  reveal,
 }: {
   value: string;
   onChange: (next: string) => void;
   onScrollLine?: (line: number) => void;
   apiRef?: React.MutableRefObject<EditorApi | null>;
+  /** A line to put the caret on, from a search hit. The token makes a repeated
+   *  jump to the same line fire again. */
+  reveal?: { line: number; token: number } | null;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -171,6 +175,18 @@ export function Editor({
     // Built once: a new note replaces the document instead of the editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const instance = view.current;
+    if (!instance || !reveal) return;
+    const doc = instance.state.doc;
+    const line = doc.line(Math.min(Math.max(1, reveal.line), doc.lines));
+    instance.dispatch({
+      selection: { anchor: line.from },
+      effects: EditorView.scrollIntoView(line.from, { y: "center" }),
+    });
+    instance.focus();
+  }, [reveal]);
 
   useEffect(() => {
     const instance = view.current;

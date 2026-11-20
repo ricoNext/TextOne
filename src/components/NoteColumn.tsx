@@ -20,6 +20,7 @@ export function NoteColumn({
   lang,
   error,
   dark,
+  reveal,
   onChangeBody,
   onModeChange,
   onRetrySave,
@@ -33,6 +34,8 @@ export function NoteColumn({
   /** A failed write, shown over the text rather than swallowed. */
   error: string | null;
   dark: boolean;
+  /** A line to jump to, from a search hit. */
+  reveal: { line: number; token: number } | null;
   onChangeBody: (body: string) => void;
   onModeChange: (mode: EditorMode) => void;
   onRetrySave: () => void;
@@ -168,6 +171,7 @@ export function NoteColumn({
                 onChange={onChangeBody}
                 onScrollLine={mode === "split" ? fromEditor : undefined}
                 apiRef={editorApi}
+                reveal={reveal}
               />
             </div>
           )}

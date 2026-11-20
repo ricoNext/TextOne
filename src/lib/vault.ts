@@ -97,6 +97,34 @@ export async function trashNote(path: string): Promise<void> {
   return invoke<void>("note_trash", { path });
 }
 
+export interface SearchHit {
+  path: string;
+  title: string;
+  folder: string;
+  modified: number;
+  snippet: string;
+  line: number;
+}
+
+/** Full-text search: the title first, then the first matching line. */
+export async function searchNotes(query: string): Promise<SearchHit[]> {
+  if (!isDesktop) {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return [];
+    return [...memory.values()]
+      .filter((note) => note.title.toLowerCase().includes(needle))
+      .map((note) => ({
+        path: note.path,
+        title: note.title,
+        folder: note.folder,
+        modified: note.modified,
+        snippet: "",
+        line: 1,
+      }));
+  }
+  return invoke<SearchHit[]>("search_notes", { query, limit: 50 });
+}
+
 export async function createNote(
   folder: string,
   title: string,
