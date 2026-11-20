@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { isDesktop } from "../lib/vault";
+import {
+  buildIndex,
+  lineForOffset,
+  offsetForLine,
+  type Mark,
+} from "../lib/scrollSync";
 import { MarkdownPreview } from "./MarkdownPreview";
 import "./Preview.css";
 
@@ -42,12 +48,19 @@ const BRIDGE_SHIM = `<script>
   })();
 </script>`;
 
+export interface PreviewApi {
+  /** Puts a source line at the top of the preview. */
+  scrollToLine: (line: number) => void;
+}
+
 export function Preview({
   source,
   directory,
   hardBreaks,
   dark,
   onToggleTask,
+  onScrollLine,
+  apiRef,
 }: {
   source: string;
   /** The note's folder, against which relative image paths resolve. */
@@ -56,12 +69,21 @@ export function Preview({
   dark: boolean;
   /** A checkbox was clicked in the preview: the line to flip in the source. */
   onToggleTask: (line: number) => void;
+  /** The first line fully visible after a user scroll. */
+  onScrollLine?: (line: number) => void;
+  apiRef?: React.MutableRefObject<PreviewApi | null>;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [template, setTemplate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const loaded = useRef(false);
   const rendered = useRef<string>("");
+  /** Block offsets, rebuilt whenever the document changes. */
+  const marks = useRef<Mark[]>([]);
+  const onScrollRef = useRef(onScrollLine);
+  const api = useRef(apiRef);
+  onScrollRef.current = onScrollLine;
+  api.current = apiRef;
 
   // The template is fetched once; seven megabytes of runtime come with it.
   useEffect(() => {
@@ -136,6 +158,51 @@ export function Preview({
     runtime?.MiaoYanCommon?.renderPage?.();
   };
 
+  const rebuildIndex = () => {
+    const doc = frame.current?.contentDocument;
+    if (!doc) return;
+    const scroller = doc.scrollingElement ?? doc.documentElement;
+    const blocks = doc.querySelectorAll("#write [data-sourcepos]");
+    marks.current = buildIndex(
+      blocks,
+      (element) => element.getBoundingClientRect().top + scroller.scrollTop,
+      (element) => {
+        const position = element.getAttribute("data-sourcepos") ?? "";
+        return Number.parseInt(position.split("-")[0].split(":")[0], 10);
+      },
+    );
+    if (api.current) {
+      api.current.current = {
+        scrollToLine(line: number) {
+          const target = frame.current?.contentDocument;
+          if (!target) return;
+          const box = target.scrollingElement ?? target.documentElement;
+          box.scrollTop = offsetForLine(marks.current, line);
+        },
+      };
+    }
+  };
+
+  // One listener for the island's scrolls, so the editor can follow.
+  useEffect(() => {
+    const view = frame.current?.contentWindow;
+    if (!view) return;
+    let frameId = 0;
+    const onScroll = () => {
+      if (frameId) return;
+      frameId = window.requestAnimationFrame(() => {
+        frameId = 0;
+        const doc = frame.current?.contentDocument;
+        if (!doc) return;
+        const box = doc.scrollingElement ?? doc.documentElement;
+        const line = lineForOffset(marks.current, box.scrollTop);
+        onScrollRef.current?.(line);
+      });
+    };
+    view.addEventListener("scroll", onScroll, { passive: true });
+    return () => view.removeEventListener("scroll", onScroll);
+  }, [template]);
+
   // Checkbox clicks come back through the shim.
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -172,6 +239,9 @@ export function Preview({
       onLoad={() => {
         const doc = frame.current?.contentDocument;
         if (doc) rewriteImages(doc, directory);
+        rebuildIndex();
+        // Images and diagrams change the page height as they arrive.
+        window.setTimeout(rebuildIndex, 600);
       }}
     />
   );

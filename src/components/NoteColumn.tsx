@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { Editor } from "./Editor";
-import { Preview } from "./Preview";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Editor, type EditorApi } from "./Editor";
+import { Preview, type PreviewApi } from "./Preview";
 import { Icon } from "./Icon";
 import { fullTimestamp, type Lang } from "../lib/date";
 import type { EditorMode } from "../types";
@@ -44,6 +44,31 @@ export function NoteColumn({
   // The title is the file name, so renaming here renames the file on disk.
   const [draft, setDraft] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+
+  // Two-way scroll sync. Whichever pane the reader touched owns the scroll for
+  // a moment; the other's programmatic scroll must not bounce it back.
+  const editorApi = useRef<EditorApi | null>(null);
+  const previewApi = useRef<PreviewApi | null>(null);
+  const owner = useRef<{ source: "editor" | "preview" | null; until: number }>({
+    source: null,
+    until: 0,
+  });
+
+  const fromEditor = useCallback((line: number) => {
+    if (owner.current.source === "preview" && performance.now() < owner.current.until) {
+      return;
+    }
+    owner.current = { source: "editor", until: performance.now() + 150 };
+    previewApi.current?.scrollToLine(line);
+  }, []);
+
+  const fromPreview = useCallback((line: number) => {
+    if (owner.current.source === "editor" && performance.now() < owner.current.until) {
+      return;
+    }
+    owner.current = { source: "preview", until: performance.now() + 150 };
+    editorApi.current?.scrollToLine(line);
+  }, []);
 
   useEffect(() => setDraft(null), [note?.path]);
 
@@ -141,6 +166,8 @@ export function NoteColumn({
                 key={note.path}
                 value={note.body}
                 onChange={onChangeBody}
+                onScrollLine={mode === "split" ? fromEditor : undefined}
+                apiRef={editorApi}
               />
             </div>
           )}
@@ -153,6 +180,8 @@ export function NoteColumn({
                 hardBreaks
                 dark={dark}
                 onToggleTask={onToggleTask}
+                onScrollLine={mode === "split" ? fromPreview : undefined}
+                apiRef={previewApi}
               />
             </div>
           )}

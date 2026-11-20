@@ -80,21 +80,30 @@ const editorTheme = EditorView.theme({
   },
 });
 
+export interface EditorApi {
+  /** Puts a source line at the top of the viewport. */
+  scrollToLine: (line: number) => void;
+}
+
 export function Editor({
   value,
   onChange,
   onScrollLine,
+  apiRef,
 }: {
   value: string;
   onChange: (next: string) => void;
   onScrollLine?: (line: number) => void;
+  apiRef?: React.MutableRefObject<EditorApi | null>;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const onScrollRef = useRef(onScrollLine);
+  const api = useRef(apiRef);
   onChangeRef.current = onChange;
   onScrollRef.current = onScrollLine;
+  api.current = apiRef;
 
   useEffect(() => {
     const instance = new EditorView({
@@ -139,9 +148,25 @@ export function Editor({
       parent: host.current!,
     });
     view.current = instance;
+    if (api.current) {
+      api.current.current = {
+        scrollToLine(line: number) {
+          const doc = instance.state.doc;
+          const clamped = Math.min(Math.max(1, line), doc.lines);
+          // CodeMirror's own scroll effect lands the line at the top edge
+          // without fighting the scroll anchoring.
+          instance.dispatch({
+            effects: EditorView.scrollIntoView(doc.line(clamped).from, {
+              y: "start",
+            }),
+          });
+        },
+      };
+    }
     return () => {
       instance.destroy();
       view.current = null;
+      if (api.current) api.current.current = null;
     };
     // Built once: a new note replaces the document instead of the editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
