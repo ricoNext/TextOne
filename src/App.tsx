@@ -26,6 +26,7 @@ import "./App.css";
 const ALL = "all";
 const SAVE_DELAY = 1500;
 const SESSION_KEY = "textone.session";
+const VAULT_KEY = "textone.vault";
 
 interface OpenNote {
   meta: NoteMeta;
@@ -196,7 +197,8 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    openVault()
+    const saved = window.localStorage.getItem(VAULT_KEY) ?? undefined;
+    openVault(saved)
       .then((next) => {
         if (cancelled) return;
         setVault(next);
@@ -238,6 +240,34 @@ export default function App() {
     },
     [scheduleSave],
   );
+
+  const switchVault = useCallback(async () => {
+    if (!isDesktop) return;
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const picked = await open({
+      directory: true,
+      multiple: false,
+      title: "选择笔记库",
+    });
+    if (typeof picked !== "string" || !picked) return;
+
+    await flushRef.current();
+    try {
+      const next = await openVault(picked);
+      window.localStorage.setItem(VAULT_KEY, picked);
+      window.localStorage.removeItem(SESSION_KEY);
+      setVault(next);
+      setExpanded(new Set(next.folders.map((folder) => folder.path)));
+      setScope(ALL);
+      setQuery("");
+      setOpen(null);
+      const first = [...next.notes].sort((a, b) => b.modified - a.modified)[0];
+      if (first) void openNote(first);
+      setError(null);
+    } catch (reason) {
+      setError(String(reason));
+    }
+  }, [openNote]);
 
   const openResult = useCallback(
     async (hit: SearchHit) => {
@@ -408,6 +438,9 @@ export default function App() {
         break;
       case "save":
         void flush();
+        break;
+      case "open_vault":
+        void switchVault();
         break;
       case "delete_note":
         if (open) void removeOpen(open.meta.path);

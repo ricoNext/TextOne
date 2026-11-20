@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::storage::{self, NoteBody, NoteMeta, Vault};
 
@@ -35,7 +35,11 @@ impl VaultState {
 /// Opens a library and returns its tree. With no `root`, the last one this
 /// session used, or the default `~/Documents/TextOne`.
 #[tauri::command]
-pub fn vault_open(state: State<'_, VaultState>, root: Option<String>) -> Result<Vault, String> {
+pub fn vault_open(
+    app: tauri::AppHandle,
+    state: State<'_, VaultState>,
+    root: Option<String>,
+) -> Result<Vault, String> {
     let path = match root {
         Some(root) if !root.trim().is_empty() => PathBuf::from(root),
         _ => state
@@ -44,6 +48,9 @@ pub fn vault_open(state: State<'_, VaultState>, root: Option<String>) -> Result<
     };
 
     storage::ensure_root(&path)?;
+    // The preview reads images off the disk; a library the user just picked
+    // must be readable, not only the default one the config named.
+    let _ = app.asset_protocol_scope().allow_directory(&path, true);
     if let Ok(mut guard) = state.root.lock() {
         *guard = Some(path.clone());
     }

@@ -18,6 +18,7 @@ pub const MENU_EVENT: &str = "textone-menu";
 /// Menu items whose only job is to tell the web side what was chosen.
 const ITEMS: &[(&str, &str, Option<&str>)] = &[
     ("new_note", "新建笔记", Some("CmdOrCtrl+N")),
+    ("open_vault", "打开笔记库…", Some("CmdOrCtrl+O")),
     ("save", "保存", Some("CmdOrCtrl+S")),
     ("delete_note", "移到废纸篓", Some("CmdOrCtrl+Backspace")),
     ("undo", "撤销", Some("CmdOrCtrl+Z")),
@@ -65,6 +66,8 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
         true,
         &[
             &item(app, "new_note")?,
+            &item(app, "open_vault")?,
+            &PredefinedMenuItem::separator(app)?,
             &item(app, "save")?,
             &PredefinedMenuItem::separator(app)?,
             &item(app, "delete_note")?,
