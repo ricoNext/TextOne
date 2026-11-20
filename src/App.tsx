@@ -11,6 +11,7 @@ import {
   openVault,
   readNote,
   renameNote,
+  saveAttachment,
   searchNotes,
   rescanVault,
   trashNote,
@@ -284,6 +285,23 @@ export default function App() {
       setReveal({ line: hit.line, token: revealRef.current });
     },
     [vault, openNote],
+  );
+
+  const pasteImage = useCallback(
+    async (base64: string, extension: string): Promise<string | null> => {
+      if (!open) return null;
+      if (open.readonly) {
+        setError("这篇笔记是只读的，图片没有保存");
+        return null;
+      }
+      try {
+        return await saveAttachment(open.meta.path, base64, extension);
+      } catch (reason) {
+        setError(String(reason));
+        return null;
+      }
+    },
+    [open],
   );
 
   const toggleTask = useCallback(
@@ -617,6 +635,7 @@ export default function App() {
         }}
         onToggleTask={toggleTask}
         editorApiRef={editorApiRef}
+        onPasteImage={pasteImage}
       />
     </div>
   );

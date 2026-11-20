@@ -95,6 +95,8 @@ export interface EditorApi {
   insertLink: () => void;
   undo: () => void;
   redo: () => void;
+  /** Inserts text at the caret and leaves the caret after it. */
+  insert: (text: string) => void;
   focus: () => void;
 }
 
@@ -104,6 +106,7 @@ export function Editor({
   onScrollLine,
   apiRef,
   reveal,
+  onPasteImage,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -112,6 +115,8 @@ export function Editor({
   /** A line to put the caret on, from a search hit. The token makes a repeated
    *  jump to the same line fire again. */
   reveal?: { line: number; token: number } | null;
+  /** Stores a pasted image and returns the markdown path, or null to drop it. */
+  onPasteImage?: (base64: string, extension: string) => Promise<string | null>;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -213,6 +218,14 @@ export function Editor({
           });
           instance.focus();
         },
+        insert(text: string) {
+          const { from, to } = instance.state.selection.main;
+          instance.dispatch({
+            changes: { from, to, insert: text },
+            selection: { anchor: from + text.length },
+          });
+          instance.focus();
+        },
         scrollToLine(line: number) {
           const doc = instance.state.doc;
           const clamped = Math.min(Math.max(1, line), doc.lines);
@@ -257,5 +270,77 @@ export function Editor({
     });
   }, [value]);
 
-  return <div className="editor-host" ref={host} />;
+  return (
+    <div
+      className="editor-host"
+      ref={host}
+      onPaste={(event) => void handleImages(event, onPasteImage, api.current)}
+      onDragOver={(event) => {
+        if (Array.from(event.dataTransfer.types).includes("Files")) {
+          event.preventDefault();
+        }
+      }}
+      onDrop={(event) => {
+        if (event.dataTransfer.files.length === 0) return;
+        event.preventDefault();
+        void dropFiles(event.dataTransfer.files, onPasteImage, api.current);
+      }}
+    />
+  );
+}
+
+/** Images pasted from a screenshot tool or copied from Finder. */
+async function handleImages(
+  event: React.ClipboardEvent,
+  save: ((base64: string, extension: string) => Promise<string | null>) | undefined,
+  api: React.MutableRefObject<EditorApi | null> | undefined,
+) {
+  if (!save) return;
+  const item = Array.from(event.clipboardData.items).find((entry) =>
+    entry.type.startsWith("image/"),
+  );
+  if (!item) return;
+  // Only claim the paste once there is an image in it, so text paste is left
+  // to CodeMirror.
+  event.preventDefault();
+  const file = item.getAsFile();
+  if (!file) return;
+  await insertFile(file, save, api);
+}
+
+async function dropFiles(
+  files: FileList,
+  save: ((base64: string, extension: string) => Promise<string | null>) | undefined,
+  api: React.MutableRefObject<EditorApi | null> | undefined,
+) {
+  if (!save) return;
+  for (const file of Array.from(files)) {
+    if (!file.type.startsWith("image/")) continue;
+    await insertFile(file, save, api);
+  }
+}
+
+async function insertFile(
+  file: File,
+  save: (base64: string, extension: string) => Promise<string | null>,
+  api: React.MutableRefObject<EditorApi | null> | undefined,
+) {
+  const extension = (file.type.split("/")[1] ?? "png").replace("jpeg", "jpg");
+  const base64 = await toBase64(file);
+  if (!base64) return;
+  const path = await save(base64, extension);
+  if (path) api?.current?.insert(`![](${path})`);
+}
+
+function toBase64(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : null);
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
 }

@@ -4,6 +4,8 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine as _;
 use tauri::{Manager, State};
 
 use crate::storage::{self, NoteBody, NoteMeta, Vault};
@@ -65,6 +67,22 @@ pub fn vault_rescan(state: State<'_, VaultState>) -> Result<Vault, String> {
 #[tauri::command]
 pub fn vault_path(state: State<'_, VaultState>) -> Result<String, String> {
     Ok(state.root()?.display().to_string())
+}
+
+/// A pasted or dropped image lands in the note's own `i/` folder, and the
+/// markdown gets a path relative to the note, which the preview resolves.
+#[tauri::command]
+pub fn save_attachment(
+    state: State<'_, VaultState>,
+    note_path: String,
+    data: String,
+    extension: String,
+) -> Result<String, String> {
+    let note = state.check(&note_path)?;
+    let bytes = STANDARD
+        .decode(data.as_bytes())
+        .map_err(|_| "图片数据不完整，没能保存".to_string())?;
+    storage::save_attachment(&note, &bytes, &extension)
 }
 
 #[tauri::command]

@@ -36,6 +36,7 @@ pub fn run() {
             commands::note_trash,
             commands::render_markdown,
             commands::search_notes,
+            commands::save_attachment,
         ])
         .run(tauri::generate_context!())
         .expect("TextOne could not start");

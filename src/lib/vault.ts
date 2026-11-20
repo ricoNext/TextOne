@@ -125,6 +125,25 @@ export async function searchNotes(query: string): Promise<SearchHit[]> {
   return invoke<SearchHit[]>("search_notes", { query, limit: 50 });
 }
 
+/** Writes a pasted image next to the note and returns the path to put in the
+ *  markdown. In the browser there is no disk, so the data URL is returned and
+ *  the preview still shows the picture. */
+export async function saveAttachment(
+  notePath: string,
+  base64: string,
+  extension: string,
+): Promise<string> {
+  if (!isDesktop) {
+    const mime = extension === "jpg" ? "jpeg" : extension;
+    return `data:image/${mime};base64,${base64}`;
+  }
+  return invoke<string>("save_attachment", {
+    notePath,
+    data: base64,
+    extension,
+  });
+}
+
 export async function createNote(
   folder: string,
   title: string,

@@ -28,6 +28,7 @@ export function NoteColumn({
   onRename,
   onToggleTask,
   editorApiRef,
+  onPasteImage,
 }: {
   note: OpenNoteView | null;
   mode: EditorMode;
@@ -46,6 +47,8 @@ export function NoteColumn({
   onToggleTask: (line: number) => void;
   /** Owned by App, so the menu bar can drive the editor. */
   editorApiRef: React.MutableRefObject<EditorApi | null>;
+  /** Stores a pasted image and returns the path to insert. */
+  onPasteImage: (base64: string, extension: string) => Promise<string | null>;
 }) {
   // The title is the file name, so renaming here renames the file on disk.
   const [draft, setDraft] = useState<string | null>(null);
@@ -174,6 +177,7 @@ export function NoteColumn({
                 onScrollLine={mode === "split" ? fromEditor : undefined}
                 apiRef={editorApiRef}
                 reveal={reveal}
+                onPasteImage={onPasteImage}
               />
             </div>
           )}

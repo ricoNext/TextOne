@@ -311,6 +311,78 @@ pub fn create(folder: &Path, title: &str) -> Result<NoteMeta, String> {
     })
 }
 
+/// Saves a pasted or dropped file beside the note, in `i/`, and returns the
+/// path to write into the markdown. `i` is what MiaoYan uses and what the
+/// library scan already skips.
+pub fn save_attachment(note_path: &Path, data: &[u8], extension: &str) -> Result<String, String> {
+    let folder = note_path
+        .parent()
+        .ok_or_else(|| "笔记路径没有上级目录".to_string())?
+        .join("i");
+    fs::create_dir_all(&folder).map_err(|error| format!("无法创建图片目录：{error}"))?;
+
+    let extension = sanitize_extension(extension);
+    let base = stamp(now_millis());
+    let mut name = format!("{base}.{extension}");
+    let mut counter = 2;
+    while folder.join(&name).exists() {
+        name = format!("{base}-{counter}.{extension}");
+        counter += 1;
+        if counter > 999 {
+            return Err("同一秒内图片太多".into());
+        }
+    }
+
+    fs::write(folder.join(&name), data).map_err(|error| format!("无法写入图片：{error}"))?;
+    Ok(format!("i/{name}"))
+}
+
+fn sanitize_extension(extension: &str) -> String {
+    let cleaned: String = extension
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .take(5)
+        .collect::<String>()
+        .to_ascii_lowercase();
+    match cleaned.as_str() {
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "heic" | "svg" | "avif" => cleaned,
+        "" => "png".into(),
+        _ => "png".into(),
+    }
+}
+
+fn now_millis() -> i64 {
+    millis(Some(SystemTime::now()))
+}
+
+/// `2026-11-20-181500`: readable in Finder, sortable, and unique enough that
+/// two pastes in the same second fall to the counter.
+fn stamp(millis: i64) -> String {
+    let seconds = millis.div_euclid(1000);
+    let days = seconds.div_euclid(86_400);
+    let time = seconds.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    let hour = time / 3600;
+    let minute = (time % 3600) / 60;
+    let second = time % 60;
+    format!("{year:04}-{month:02}-{day:02}-{hour:02}{minute:02}{second:02}")
+}
+
+/// Howard Hinnant's civil-from-days: epoch days to a calendar date without a
+/// date library.
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as i64;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    (if month <= 2 { year + 1 } else { year }, month, day)
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchHit {
@@ -706,6 +778,29 @@ mod tests {
         // Case does not matter, and the limit is honoured.
         assert_eq!(search(&root, "NOTHING", 10).unwrap().len(), 1);
         assert_eq!(search(&root, "e", 1).unwrap().len(), 1);
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_attachment_lands_in_the_note_folder() {
+        let root = scratch("attach");
+        let note = root.join("a.md");
+        fs::write(&note, "# a").unwrap();
+
+        let first = save_attachment(&note, b"png-bytes", "PNG").unwrap();
+        assert!(first.starts_with("i/"), "{first}");
+        assert!(first.ends_with(".png"), "{first}");
+        assert_eq!(fs::read(root.join(&first)).unwrap(), b"png-bytes");
+
+        // Two in the same second must not overwrite each other.
+        let second = save_attachment(&note, b"other", "jpeg").unwrap();
+        assert_ne!(first, second);
+
+        // An unknown extension falls back to png rather than the disk's.
+        let odd = save_attachment(&note, b"x", "../../evil").unwrap();
+        assert!(odd.ends_with(".png"), "{odd}");
+        assert!(!odd.contains(".."), "{odd}");
 
         fs::remove_dir_all(&root).ok();
     }
