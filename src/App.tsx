@@ -42,6 +42,12 @@ export default function App() {
   const [resizing, setResizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lang] = useState<Lang>("zh");
+  const [dark, setDark] = useState(() => {
+    const forced = new URLSearchParams(window.location.search).get("theme");
+    if (forced === "dark") return true;
+    if (forced === "light") return false;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
 
   const timer = useRef<number | null>(null);
   const draft = useRef<{ path: string; body: string } | null>(null);
@@ -53,10 +59,17 @@ export default function App() {
   const queue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
-    const theme = new URLSearchParams(window.location.search).get("theme");
-    if (theme === "dark" || theme === "light") {
-      document.documentElement.dataset.theme = theme;
+    const forced = new URLSearchParams(window.location.search).get("theme");
+    if (forced === "dark" || forced === "light") {
+      document.documentElement.dataset.theme = forced;
     }
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => setDark(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
   }, []);
 
   // ── Saving ───────────────────────────────────────────────────────────────
@@ -181,6 +194,28 @@ export default function App() {
     (body: string) => {
       setOpen((current) => {
         if (!current || current.readonly) return current;
+        scheduleSave(current.meta.path, body);
+        return { ...current, body };
+      });
+    },
+    [scheduleSave],
+  );
+
+  const toggleTask = useCallback(
+    (line: number) => {
+      setOpen((current) => {
+        if (!current || current.readonly) return current;
+        const lines = current.body.split("\n");
+        const index = line - 1;
+        if (index < 0 || index >= lines.length) return current;
+        const match = /^(\s*(?:[-*+]|\d+\.)\s+\[)( |x|X)(\])/.exec(lines[index]);
+        if (!match) return current;
+        const done = match[2].toLowerCase() === "x";
+        lines[index] = lines[index].replace(
+          /\[( |x|X)\]/,
+          done ? "[ ]" : "[x]",
+        );
+        const body = lines.join("\n");
         scheduleSave(current.meta.path, body);
         return { ...current, body };
       });
@@ -405,6 +440,7 @@ export default function App() {
         }
         mode={mode}
         lang={lang}
+        dark={dark}
         error={error}
         onChangeBody={changeBody}
         onModeChange={setMode}
@@ -413,6 +449,7 @@ export default function App() {
         onRename={(title) => {
           if (open) void renameOpen(open.meta.path, title);
         }}
+        onToggleTask={toggleTask}
       />
     </div>
   );

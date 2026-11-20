@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Editor } from "./Editor";
-import { MarkdownPreview } from "./MarkdownPreview";
+import { Preview } from "./Preview";
 import { Icon } from "./Icon";
 import { fullTimestamp, type Lang } from "../lib/date";
 import type { EditorMode } from "../types";
@@ -19,22 +19,27 @@ export function NoteColumn({
   mode,
   lang,
   error,
+  dark,
   onChangeBody,
   onModeChange,
   onRetrySave,
   onDismissError,
   onRename,
+  onToggleTask,
 }: {
   note: OpenNoteView | null;
   mode: EditorMode;
   lang: Lang;
   /** A failed write, shown over the text rather than swallowed. */
   error: string | null;
+  dark: boolean;
   onChangeBody: (body: string) => void;
   onModeChange: (mode: EditorMode) => void;
   onRetrySave: () => void;
   onDismissError: () => void;
   onRename: (title: string) => void;
+  /** A checkbox was clicked in the preview: flip that line of the source. */
+  onToggleTask: (line: number) => void;
 }) {
   // The title is the file name, so renaming here renames the file on disk.
   const [draft, setDraft] = useState<string | null>(null);
@@ -142,7 +147,13 @@ export function NoteColumn({
           {mode === "split" && <div className="note-split-divider" />}
           {(mode === "preview" || mode === "split") && (
             <div className="note-pane">
-              <MarkdownPreview source={note.body} />
+              <Preview
+                source={note.body}
+                directory={directoryOf(note.path)}
+                hardBreaks
+                dark={dark}
+                onToggleTask={onToggleTask}
+              />
             </div>
           )}
         </div>
@@ -170,4 +181,10 @@ export function NoteColumn({
       )}
     </section>
   );
+}
+
+/** The folder a note sits in, which relative images resolve against. */
+function directoryOf(path: string): string {
+  const index = path.lastIndexOf("/");
+  return index > 0 ? path.slice(0, index) : path;
 }

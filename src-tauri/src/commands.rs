@@ -99,3 +99,10 @@ pub fn note_create(
     let folder = state.check(&folder)?;
     storage::create(&folder, &title)
 }
+
+/// Markdown to HTML for the preview. The note's own folder comes along so
+/// relative images can be pointed at the asset protocol.
+#[tauri::command]
+pub fn render_markdown(markdown: String, hard_breaks: bool) -> String {
+    crate::markdown::render(&markdown, hard_breaks)
+}

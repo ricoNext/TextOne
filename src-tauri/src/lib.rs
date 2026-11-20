@@ -6,6 +6,7 @@
 //! write. The preview island's host arrives in a later milestone.
 
 mod commands;
+mod markdown;
 mod storage;
 
 use commands::VaultState;
@@ -23,6 +24,7 @@ pub fn run() {
             commands::note_create,
             commands::note_rename,
             commands::note_trash,
+            commands::render_markdown,
         ])
         .run(tauri::generate_context!())
         .expect("TextOne could not start");
