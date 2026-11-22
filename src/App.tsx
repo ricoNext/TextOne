@@ -28,6 +28,22 @@ const ALL = "all";
 const SAVE_DELAY = 1500;
 const SESSION_KEY = "textone.session";
 const VAULT_KEY = "textone.vault";
+const SORT_KEY = "textone.sort";
+
+type SortBy = "modified" | "created" | "title";
+
+function readSort(): { by: SortBy; desc: boolean } {
+  try {
+    const raw = window.localStorage.getItem(SORT_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { by: SortBy; desc: boolean };
+      if (["modified", "created", "title"].includes(parsed.by)) return parsed;
+    }
+  } catch {
+    // Fall through to the default: newest first.
+  }
+  return { by: "modified", desc: true };
+}
 
 interface OpenNote {
   meta: NoteMeta;
@@ -49,6 +65,7 @@ export default function App() {
   const [resizing, setResizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState(readSort);
   const [results, setResults] = useState<SearchHit[]>([]);
   const [lang] = useState<Lang>("zh");
   const [dark, setDark] = useState(() => {
@@ -383,8 +400,22 @@ export default function App() {
       scope === ALL
         ? vault.notes
         : vault.notes.filter((note) => note.folder === scope);
-    return [...notes].sort((a, b) => b.modified - a.modified);
-  }, [vault, scope]);
+    const sorted = [...notes];
+    const direction = sort.desc ? -1 : 1;
+    sorted.sort((a, b) => {
+      if (sort.by === "title") {
+        return a.title.localeCompare(b.title, "zh-Hans") * direction;
+      }
+      const left = sort.by === "created" ? a.created : a.modified;
+      const right = sort.by === "created" ? b.created : b.modified;
+      return (left - right) * direction;
+    });
+    return sorted;
+  }, [vault, scope, sort]);
+
+  useEffect(() => {
+    window.localStorage.setItem(SORT_KEY, JSON.stringify(sort));
+  }, [sort]);
 
   // ── Session ──────────────────────────────────────────────────────────────
 
@@ -487,6 +518,18 @@ export default function App() {
         break;
       case "format_link":
         editorApiRef.current?.insertLink();
+        break;
+      case "sort_modified":
+        setSort((current) => ({ ...current, by: "modified" }));
+        break;
+      case "sort_created":
+        setSort((current) => ({ ...current, by: "created" }));
+        break;
+      case "sort_title":
+        setSort((current) => ({ ...current, by: "title" }));
+        break;
+      case "sort_desc":
+        setSort((current) => ({ ...current, desc: !current.desc }));
         break;
       case "mode_editor":
         setMode("editor");

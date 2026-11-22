@@ -106,6 +106,21 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
         ],
     )?;
 
+    // Radio behaviour is the web side's: it owns the list and the order the
+    // reader last chose.
+    let sort = Submenu::with_items(
+        app,
+        "排序",
+        true,
+        &[
+            &MenuItem::with_id(app, "sort_modified", "按修改时间", true, None::<&str>)?,
+            &MenuItem::with_id(app, "sort_created", "按创建时间", true, None::<&str>)?,
+            &MenuItem::with_id(app, "sort_title", "按标题", true, None::<&str>)?,
+            &PredefinedMenuItem::separator(app)?,
+            &MenuItem::with_id(app, "sort_desc", "切换升降序", true, None::<&str>)?,
+        ],
+    )?;
+
     let view = Submenu::with_items(
         app,
         "显示",
@@ -114,6 +129,8 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
             &item(app, "mode_editor")?,
             &item(app, "mode_split")?,
             &item(app, "mode_preview")?,
+            &PredefinedMenuItem::separator(app)?,
+            &sort,
         ],
     )?;
 

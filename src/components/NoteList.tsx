@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Icon } from "./Icon";
 import { shortDate, type Lang } from "../lib/date";
 import type { NoteMeta, SearchHit } from "../lib/vault";
@@ -35,6 +36,7 @@ export function NoteList({
   onQueryChange: (query: string) => void;
   onNewNote: () => void;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
   const searching = query.trim().length > 0;
   const rows: Row[] = searching
     ? results.map((hit) => ({
@@ -78,7 +80,33 @@ export function NoteList({
         </button>
       </header>
 
-      <div className="note-list-scroll scroll">
+      <div
+        ref={listRef}
+        className="note-list-scroll scroll"
+        tabIndex={0}
+        role="listbox"
+        aria-label="笔记列表"
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          event.preventDefault();
+          if (rows.length === 0) return;
+          const index = rows.findIndex((row) => row.path === selectedPath);
+          const step = event.key === "ArrowDown" ? 1 : -1;
+          const next =
+            index < 0
+              ? 0
+              : Math.min(rows.length - 1, Math.max(0, index + step));
+          const row = rows[next];
+          if (row.line === undefined) {
+            onSelect(row.path);
+            return;
+          }
+          const hit = results.find(
+            (result) => result.path === row.path && result.line === row.line,
+          );
+          if (hit) onOpenResult(hit);
+        }}
+      >
         {rows.length === 0 ? (
           <div className="note-list-empty">
             <Icon name="home" size={28} />
@@ -101,6 +129,7 @@ export function NoteList({
                     data-search={searching || undefined}
                     title={row.path}
                     onClick={() => {
+                      listRef.current?.focus();
                       if (row.line === undefined) {
                         onSelect(row.path);
                         return;

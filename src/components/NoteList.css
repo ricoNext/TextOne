@@ -145,3 +145,9 @@
   font-size: var(--fs-min);
   color: var(--ink-3);
 }
+
+/* The list takes the keyboard once a row is clicked, so the arrows can move
+ * between notes without a trip to the menu. */
+.note-list-scroll:focus {
+  outline: none;
+}
