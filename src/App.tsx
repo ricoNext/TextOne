@@ -6,12 +6,15 @@ import type { EditorApi } from "./components/Editor";
 import { NoteList } from "./components/NoteList";
 import { NoteColumn } from "./components/NoteColumn";
 import { Splitter } from "./components/Splitter";
+import { ContextMenu, type ContextItem } from "./components/ContextMenu";
 import {
   createNote,
+  duplicateNote,
   isDesktop,
   openVault,
   readNote,
   renameNote,
+  revealNote,
   saveAttachment,
   searchNotes,
   rescanVault,
@@ -114,6 +117,12 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState(readSort);
+  const [rowMenu, setRowMenu] = useState<{
+    x: number;
+    y: number;
+    path: string;
+  } | null>(null);
+  const [renameSignal, setRenameSignal] = useState(0);
   const [results, setResults] = useState<SearchHit[]>([]);
   const [lang] = useState<Lang>("zh");
   const [settings, setSettings] = useState<Settings>(readSettings);
@@ -375,6 +384,17 @@ export default function App() {
       await openNote(meta);
       revealRef.current += 1;
       setReveal({ line: hit.line, token: revealRef.current });
+    },
+    [vault, openNote],
+  );
+
+  const openByPath = useCallback(
+    async (path: string) => {
+      if (openRef.current?.meta.path === path) return true;
+      const meta = vault?.notes.find((note) => note.path === path);
+      if (!meta) return false;
+      await openNote(meta);
+      return true;
     },
     [vault, openNote],
   );
@@ -655,6 +675,51 @@ export default function App() {
     window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
   }, [layout]);
 
+  const rowMenuItems = useCallback((): ContextItem[] => {
+    const target = rowMenu?.path;
+    if (!target) return [];
+    return [
+      {
+        label: "重命名",
+        action: () => {
+          void openByPath(target).then((okay) => {
+            if (okay) setRenameSignal((value) => value + 1);
+          });
+        },
+      },
+      {
+        label: "制作副本",
+        action: () => {
+          void duplicateNote(target)
+            .then(async (copy) => {
+              setVault(await rescanVault());
+              await openNote(copy);
+            })
+            .catch((reason) => setError(String(reason)));
+        },
+      },
+      {
+        label: "在 Finder 中显示",
+        separatorBefore: true,
+        action: () => {
+          void revealNote(target).catch((reason) => setError(String(reason)));
+        },
+      },
+      {
+        label: "拷贝路径",
+        action: () => {
+          void navigator.clipboard.writeText(target);
+        },
+      },
+      {
+        label: "移到废纸篓",
+        danger: true,
+        separatorBefore: true,
+        action: () => void removeOpen(target),
+      },
+    ];
+  }, [rowMenu, openByPath, removeOpen, openNote]);
+
   // ── Keyboard ─────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -764,6 +829,10 @@ export default function App() {
           if (meta) void openNote(meta);
         }}
         onOpenResult={(hit) => void openResult(hit)}
+        onContextMenu={(event, path) => {
+          event.preventDefault();
+          setRowMenu({ x: event.clientX, y: event.clientY, path });
+        }}
         onQueryChange={setQuery}
         onNewNote={() => void addNote()}
         />
@@ -786,6 +855,15 @@ export default function App() {
             setLayout((current) => ({ ...current, listOpen: !current.listOpen }))
           }
           onResizingChange={setResizing}
+        />
+      )}
+
+      {rowMenu && (
+        <ContextMenu
+          x={rowMenu.x}
+          y={rowMenu.y}
+          items={rowMenuItems()}
+          onClose={() => setRowMenu(null)}
         />
       )}
 
@@ -817,6 +895,7 @@ export default function App() {
         onToggleTask={toggleTask}
         editorApiRef={editorApiRef}
         onPasteImage={pasteImage}
+        renameSignal={renameSignal}
       />
     </div>
   );

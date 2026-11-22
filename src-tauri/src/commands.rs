@@ -137,6 +137,19 @@ pub fn note_create(
 /// Markdown to HTML for the preview. The note's own folder comes along so
 /// relative images can be pointed at the asset protocol.
 #[tauri::command]
+pub fn note_duplicate(
+    state: State<'_, VaultState>,
+    path: String,
+) -> Result<NoteMeta, String> {
+    storage::duplicate(&state.check(&path)?)
+}
+
+#[tauri::command]
+pub fn reveal_note(state: State<'_, VaultState>, path: String) -> Result<(), String> {
+    storage::reveal(&state.check(&path)?)
+}
+
+#[tauri::command]
 pub fn render_markdown(markdown: String, hard_breaks: bool) -> String {
     crate::markdown::render(&markdown, hard_breaks)
 }

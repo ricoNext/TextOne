@@ -683,6 +683,50 @@ pub fn rename(path: &Path, title: &str) -> Result<PathBuf, String> {
     Ok(candidate)
 }
 
+/// Copies a note beside itself, named "<title> 副本".
+pub fn duplicate(path: &Path) -> Result<NoteMeta, String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "笔记路径没有上级目录".to_string())?;
+    let stem = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("笔记");
+
+    let mut candidate = parent.join(format!("{stem} 副本.md"));
+    let mut counter = 2;
+    while candidate.exists() {
+        candidate = parent.join(format!("{stem} 副本 {counter}.md"));
+        counter += 1;
+        if counter > 999 {
+            return Err("副本太多，换个名字吧".into());
+        }
+    }
+
+    fs::copy(path, &candidate).map_err(|error| format!("无法制作副本：{error}"))?;
+    let metadata = fs::metadata(&candidate).map_err(|error| format!("无法读取副本：{error}"))?;
+    let modified = millis(metadata.modified().ok());
+
+    Ok(NoteMeta {
+        path: candidate.display().to_string(),
+        title: title_of(&candidate),
+        folder: parent.display().to_string(),
+        modified,
+        created: modified,
+        snippet: snippet_of(&candidate),
+    })
+}
+
+/// Shows the note in Finder with `open -R`, which reveals rather than opens.
+pub fn reveal(path: &Path) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg("-R")
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("无法在 Finder 中显示：{error}"))
+}
+
 /// Moves a note to the user's Trash, where Finder can put it back. Deleting
 /// outright is not offered: a mis-click must stay recoverable.
 pub fn trash(path: &Path) -> Result<(), String> {
@@ -1010,6 +1054,25 @@ mod tests {
         assert!(!snippet.contains("tags"), "{snippet}");
         assert!(!snippet.contains("let code"), "{snippet}");
         assert!(!snippet.contains("!["), "{snippet}");
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_duplicate_sits_beside_its_original() {
+        let root = scratch("duplicate");
+        let note = root.join("想法.md");
+        fs::write(&note, "# 想法\n正文").unwrap();
+
+        let copy = duplicate(&note).unwrap();
+        assert!(copy.path.ends_with("想法 副本.md"), "{}", copy.path);
+        assert_eq!(read(Path::new(&copy.path)).unwrap().body, "# 想法\n正文");
+        // The original is untouched.
+        assert_eq!(read(&note).unwrap().body, "# 想法\n正文");
+
+        // A second copy does not overwrite the first.
+        let again = duplicate(&note).unwrap();
+        assert_ne!(copy.path, again.path);
 
         fs::remove_dir_all(&root).ok();
     }

@@ -34,6 +34,8 @@ pub fn run() {
             commands::note_create,
             commands::note_rename,
             commands::note_trash,
+            commands::note_duplicate,
+            commands::reveal_note,
             commands::render_markdown,
             commands::search_notes,
             commands::save_attachment,

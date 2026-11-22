@@ -26,6 +26,7 @@ export function NoteList({
   onOpenResult,
   onQueryChange,
   onNewNote,
+  onContextMenu,
 }: {
   notes: NoteMeta[];
   results: SearchHit[];
@@ -37,6 +38,8 @@ export function NoteList({
   onOpenResult: (hit: SearchHit) => void;
   onQueryChange: (query: string) => void;
   onNewNote: () => void;
+  /** Right-click on a row: where to draw the menu, and which note it is for. */
+  onContextMenu: (event: React.MouseEvent, path: string) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const searching = query.trim().length > 0;
@@ -132,6 +135,7 @@ export function NoteList({
                     data-divider={showsDivider || undefined}
                     data-search={searching || undefined}
                     title={row.path}
+                    onContextMenu={(event) => onContextMenu(event, row.path)}
                     onClick={() => {
                       listRef.current?.focus();
                       if (row.line === undefined) {

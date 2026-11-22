@@ -30,6 +30,7 @@ export function NoteColumn({
   onToggleTask,
   editorApiRef,
   onPasteImage,
+  renameSignal,
 }: {
   note: OpenNoteView | null;
   mode: EditorMode;
@@ -51,6 +52,8 @@ export function NoteColumn({
   editorApiRef: React.MutableRefObject<EditorApi | null>;
   /** Stores a pasted image and returns the path to insert. */
   onPasteImage: (base64: string, extension: string) => Promise<string | null>;
+  /** Bumped by the context menu's Rename: start editing the title. */
+  renameSignal?: number;
 }) {
   // The title is the file name, so renaming here renames the file on disk.
   const [draft, setDraft] = useState<string | null>(null);
@@ -81,6 +84,13 @@ export function NoteColumn({
   }, []);
 
   useEffect(() => setDraft(null), [note?.path]);
+
+  useEffect(() => {
+    if (renameSignal && note) setDraft(note.title);
+    // Only a new signal should start an edit; the title changing under an open
+    // field would fight the typist.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renameSignal]);
 
   useEffect(() => {
     if (draft === null) return;

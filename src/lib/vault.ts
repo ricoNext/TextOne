@@ -146,6 +146,24 @@ export async function saveAttachment(
   });
 }
 
+/** Copies a note beside itself and returns the copy. */
+export async function duplicateNote(path: string): Promise<NoteMeta> {
+  if (!isDesktop) {
+    const note = memory.get(path);
+    if (!note) throw new Error("这篇笔记不在内存库里");
+    const copy = { ...note, path: `${path}.副本`, title: `${note.title} 副本` };
+    memory.set(copy.path, copy);
+    return copy;
+  }
+  return invoke<NoteMeta>("note_duplicate", { path });
+}
+
+/** Shows the note in Finder. */
+export async function revealNote(path: string): Promise<void> {
+  if (!isDesktop) return;
+  return invoke<void>("reveal_note", { path });
+}
+
 export async function createNote(
   folder: string,
   title: string,
