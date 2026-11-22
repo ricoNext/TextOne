@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { Sidebar } from "./components/Sidebar";
 import type { EditorApi } from "./components/Editor";
@@ -27,6 +27,7 @@ import {
   applySettings,
   readSettings,
   SETTINGS_EVENT,
+  writeSettings,
   type Settings,
 } from "./lib/settings";
 import "./App.css";
@@ -124,6 +125,22 @@ export default function App() {
     (settings.appearance === "system" && mediaDark);
 
   const searchRef = useRef<HTMLInputElement>(null);
+  // The zoom commands read the current size outside a state updater, so the
+  // store and the event bus see exactly one change.
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+
+  const resizeBody = useCallback((next: number) => {
+    const current = settingsRef.current;
+    const size = Math.min(20, Math.max(13, Math.round(next)));
+    if (size === current.editorSize) return;
+    const updated: Settings = { ...current, editorSize: size };
+    settingsRef.current = updated;
+    setSettings(updated);
+    writeSettings(updated);
+    applySettings(updated);
+    if (isDesktop) void emit(SETTINGS_EVENT, updated);
+  }, []);
   const editorApiRef = useRef<EditorApi | null>(null);
   const revealRef = useRef(0);
   const [reveal, setReveal] = useState<{ line: number; token: number } | null>(
@@ -579,6 +596,15 @@ export default function App() {
         break;
       case "format_link":
         editorApiRef.current?.insertLink();
+        break;
+      case "zoom_in":
+        resizeBody(settingsRef.current.editorSize + 1);
+        break;
+      case "zoom_out":
+        resizeBody(settingsRef.current.editorSize - 1);
+        break;
+      case "zoom_reset":
+        resizeBody(16);
         break;
       case "toggle_sidebar":
         setLayout((current) => ({
