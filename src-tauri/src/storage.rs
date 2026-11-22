@@ -43,6 +43,8 @@ pub struct NoteMeta {
     pub folder: String,
     pub modified: i64,
     pub created: i64,
+    /// The opening of the note, stripped of markup, for the list.
+    pub snippet: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -155,6 +157,7 @@ fn walk(
             folder: dir.display().to_string(),
             modified,
             created,
+            snippet: snippet_of(&path),
         });
     }
 
@@ -177,6 +180,189 @@ fn walk(
 
     let _ = root;
     Ok(())
+}
+
+/// The first readable paragraph of a note, with the markup taken out: what a
+/// list row shows under the title. Reads a head of the file, not all of it.
+pub fn snippet_of(path: &Path) -> String {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(_) => return String::new(),
+    };
+    let head = take_chars(&bytes, 1600);
+    snippet_from(&head)
+}
+
+/// Splitting on a char boundary: a UTF-8 slice in the middle of a character
+/// would panic, and notes are mostly Chinese.
+fn take_chars(bytes: &[u8], limit: usize) -> String {
+    let cut = bytes.len().min(limit * 3);
+    let mut end = cut;
+    while end > 0 && (bytes[end - 1] & 0xC0) == 0x80 {
+        end -= 1;
+    }
+    let text = String::from_utf8_lossy(&bytes[..end]).to_string();
+    text.chars().take(limit).collect()
+}
+
+fn snippet_from(text: &str) -> String {
+    let mut out = String::new();
+    let mut in_fence = false;
+    let mut started = false;
+    // YAML frontmatter, only at the very top: everything up to the closing
+    // rule is metadata, not prose.
+    let mut in_frontmatter = false;
+    let mut frontmatter_seen = false;
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+
+        if !frontmatter_seen && !started && (trimmed == "---" || trimmed == "+++") {
+            in_frontmatter = true;
+            frontmatter_seen = true;
+            continue;
+        }
+        if in_frontmatter {
+            if trimmed == "---" || trimmed == "+++" {
+                in_frontmatter = false;
+            }
+            continue;
+        }
+
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        if trimmed.is_empty() || trimmed.starts_with("<!--") {
+            continue;
+        }
+        if trimmed.starts_with('|') && trimmed.chars().all(|ch| "|-: ".contains(ch)) {
+            continue;
+        }
+        started = true;
+
+        let cleaned = strip_inline(trimmed);
+        if cleaned.is_empty() {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(&cleaned);
+        if out.chars().count() >= 90 {
+            break;
+        }
+    }
+
+    let mut result: String = out.chars().take(90).collect();
+    if out.chars().count() > 90 {
+        result.push('…');
+    }
+    result
+}
+
+/// Removes the markup a reader should not see in a one-line summary.
+fn strip_inline(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let chars: Vec<char> = line.chars().collect();
+    let mut index = 0;
+
+    while index < chars.len() {
+        let ch = chars[index];
+
+        // Leading block markers: #, >, -, *, +, 1.
+        if ch == '#' || ch == '>' {
+            index += 1;
+            continue;
+        }
+        if (ch == '-' || ch == '*' || ch == '+') && out.is_empty() {
+            index += 1;
+            continue;
+        }
+        if ch.is_ascii_digit() && out.is_empty() {
+            let mut look = index;
+            while look < chars.len() && chars[look].is_ascii_digit() {
+                look += 1;
+            }
+            if look < chars.len() && (chars[look] == '.' || chars[look] == ')') {
+                index = look + 1;
+                continue;
+            }
+        }
+
+        // Images vanish; links keep their text.
+        if ch == '!' && chars.get(index + 1) == Some(&'[') {
+            if let Some(end) = skip_link(&chars, index + 1) {
+                index = end;
+                continue;
+            }
+        }
+        if ch == '[' && chars.get(index + 1) != Some(&'[') {
+            if let Some((text, end)) = link_text(&chars, index) {
+                out.push_str(&text);
+                index = end;
+                continue;
+            }
+        }
+
+        // Checkboxes, table pipes and the emphasis/backtick marks.
+        if ch == '[' && matches!(chars.get(index + 1), Some(' ') | Some('x') | Some('X')) {
+            if chars.get(index + 2) == Some(&']') {
+                index += 3;
+                continue;
+            }
+        }
+        if matches!(ch, '*' | '_' | '~' | '`' | '|') {
+            index += 1;
+            continue;
+        }
+
+        out.push(ch);
+        index += 1;
+    }
+
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn skip_link(chars: &[char], open: usize) -> Option<usize> {
+    let mut index = open;
+    let mut depth = 0;
+    while index < chars.len() {
+        match chars[index] {
+            '[' => depth += 1,
+            ']' => {
+                depth -= 1;
+                if depth == 0 {
+                    let mut end = index + 1;
+                    if chars.get(end) == Some(&'(') {
+                        while end < chars.len() && chars[end] != ')' {
+                            end += 1;
+                        }
+                        return Some((end + 1).min(chars.len()));
+                    }
+                    return Some(end);
+                }
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    None
+}
+
+fn link_text(chars: &[char], open: usize) -> Option<(String, usize)> {
+    let end = skip_link(chars, open)?;
+    let mut label = String::new();
+    for &ch in chars.iter().take(end).skip(open + 1) {
+        if ch == ']' {
+            break;
+        }
+        label.push(ch);
+    }
+    Some((label, end))
 }
 
 fn has_subfolder(dir: &Path) -> bool {
@@ -308,6 +494,7 @@ pub fn create(folder: &Path, title: &str) -> Result<NoteMeta, String> {
         folder: folder.display().to_string(),
         modified,
         created: modified,
+        snippet: String::new(),
     })
 }
 
@@ -801,6 +988,28 @@ mod tests {
         let odd = save_attachment(&note, b"x", "../../evil").unwrap();
         assert!(odd.ends_with(".png"), "{odd}");
         assert!(!odd.contains(".."), "{odd}");
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_snippet_drops_the_markup() {
+        let root = scratch("snippet");
+        let note = root.join("a.md");
+        fs::write(
+            &note,
+            "---\ntags: x\n---\n# 标题\n\n这是**正文**，带 [链接](https://example.com) 和 ![图](i/a.png)。\n\n```\nlet code = 1;\n```\n",
+        )
+        .unwrap();
+
+        let vault = scan(&root).unwrap();
+        let snippet = &vault.notes[0].snippet;
+        assert!(snippet.contains("这是正文"), "{snippet}");
+        assert!(!snippet.contains("**"), "{snippet}");
+        assert!(!snippet.contains("https://"), "{snippet}");
+        assert!(!snippet.contains("tags"), "{snippet}");
+        assert!(!snippet.contains("let code"), "{snippet}");
+        assert!(!snippet.contains("!["), "{snippet}");
 
         fs::remove_dir_all(&root).ok();
     }

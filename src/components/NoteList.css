@@ -72,18 +72,31 @@
  * puts the title back at 20 from the column edge and 9.5 from the row top. */
 .note-row {
   position: relative;
-  height: var(--note-row-height);
+  min-height: var(--note-row-height);
   padding: var(--note-pill-inset-v) var(--note-pill-inset-h);
 }
 
 .note-row-card {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  gap: 4px;
   height: 100%;
-  padding: 7.5px 8px 5.5px 12px;
+  padding: 9.5px 8px 8px 12px;
   border-radius: var(--radius-selection);
   transition: background-color var(--motion-change) var(--ease-out);
+}
+
+/* Two lines of the note's opening: enough to recognise a note without
+ * opening it, not so much that the list becomes a page of prose. */
+.note-row-snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--fs-list-date);
+  line-height: 1.5;
+  color: var(--ink-2);
+  word-break: break-word;
 }
 
 .note-row[data-selected] .note-row-card {

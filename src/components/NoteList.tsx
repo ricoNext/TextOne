@@ -7,7 +7,9 @@ import "./NoteList.css";
 interface Row {
   path: string;
   title: string;
-  /** A date, or the matching line when searching. */
+  /** The opening of the note, or the matching line when searching. */
+  snippet: string;
+  /** The date under the row; empty while searching. */
   detail: string;
   /** Set when the row came from a search. */
   line?: number;
@@ -42,12 +44,14 @@ export function NoteList({
     ? results.map((hit) => ({
         path: hit.path,
         title: hit.title,
-        detail: hit.snippet,
+        snippet: hit.snippet,
+        detail: "",
         line: hit.line,
       }))
     : notes.map((note) => ({
         path: note.path,
         title: note.title,
+        snippet: note.snippet,
         detail: shortDate(note.modified, lang),
       }));
 
@@ -143,9 +147,14 @@ export function NoteList({
                   >
                     <div className="note-row-card">
                       <span className="note-row-title">{row.title}</span>
-                      <span className="note-row-meta">
-                        <span className="note-row-detail">{row.detail}</span>
-                      </span>
+                      {row.snippet && (
+                        <span className="note-row-snippet">{row.snippet}</span>
+                      )}
+                      {row.detail && (
+                        <span className="note-row-meta">
+                          <span className="note-row-detail">{row.detail}</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 </li>

@@ -353,6 +353,7 @@ export default function App() {
           folder: hit.folder,
           modified: hit.modified,
           created: hit.modified,
+          snippet: "",
         };
       await openNote(meta);
       revealRef.current += 1;

@@ -18,6 +18,8 @@ export interface NoteMeta {
   /** Epoch milliseconds, from the file's modification date. */
   modified: number;
   created: number;
+  /** The note's opening, stripped of markup, for the list. */
+  snippet: string;
 }
 
 export interface Vault {
@@ -155,6 +157,7 @@ export async function createNote(
       folder,
       modified: Date.now(),
       created: Date.now(),
+      snippet: "",
     };
     memory.set(meta.path, { ...meta, body: "" });
     return meta;
@@ -173,6 +176,10 @@ const memory = new Map<string, NoteMeta & { body: string }>(
       folder: note.folder,
       modified: note.modifiedAt,
       created: note.createdAt,
+      snippet: note.body
+        .split("\n")
+        .map((line) => line.replace(/^[#>*\-\s]+/, "").trim())
+        .find((line) => line.length > 0) ?? "",
       body: note.body,
     },
   ]),
