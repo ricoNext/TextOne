@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Prec } from "@codemirror/state";
 import {
   EditorView,
   drawSelection,
@@ -11,11 +11,13 @@ import {
   defaultKeymap,
   history,
   historyKeymap,
+  indentWithTab,
   redo,
   undo,
 } from "@codemirror/commands";
 import {
   HighlightStyle,
+  indentUnit,
   syntaxHighlighting,
   indentOnInput,
 } from "@codemirror/language";
@@ -139,7 +141,20 @@ export function Editor({
           markdown(),
           syntaxHighlighting(miaoYanHighlight),
           highlightActiveLine(),
-          keymap.of([...defaultKeymap, ...historyKeymap]),
+          // Markdown's own keymap (Enter continues a list, Backspace removes
+          // the marker) is added by `markdown()` at high precedence; the task
+          // list's continuation is ours, above it.
+          Prec.highest(keymap.of([{ key: "Enter", run: continueTask }])),
+          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          indentUnit.of("  "),
+          EditorState.tabSize.of(4),
+          // Spelling squiggles over Chinese prose are noise; MiaoYan ships
+          // with the check off.
+          EditorView.contentAttributes.of({
+            spellcheck: "false",
+            autocorrect: "off",
+            autocapitalize: "off",
+          }),
           // MiaoYan's list continuation (Return after "- " opens the next
           // item, Backspace at its start removes the marker) comes from the
           // markdown language's own keymap, added by `markdown()`.
@@ -343,4 +358,34 @@ function toBase64(file: File): Promise<string | null> {
     reader.onerror = () => resolve(null);
     reader.readAsDataURL(file);
   });
+}
+
+/** Enter inside a task item opens the next empty box. Markdown's own
+ *  continuation only carries `- `, and an empty box on Enter leaves the
+ *  list, which is the "two returns" habit without needing the second. */
+function continueTask(view: EditorView): boolean {
+  const { state } = view;
+  const range = state.selection.main;
+  if (!range.empty) return false;
+  const line = state.doc.lineAt(range.from);
+  if (range.from !== line.to) return false;
+
+  const match = /^(\s*(?:[-*+]|\d+\.)\s+)\[([ xX])\]\s*(.*)$/.exec(line.text);
+  if (!match) return false;
+
+  if (match[3].trim() === "") {
+    view.dispatch({
+      changes: { from: line.from, to: line.to, insert: "" },
+      selection: { anchor: line.from },
+    });
+    return true;
+  }
+
+  const insert = `\n${match[1]}[ ] `;
+  view.dispatch({
+    changes: { from: range.from, insert },
+    selection: { anchor: range.from + insert.length },
+    scrollIntoView: true,
+  });
+  return true;
 }
