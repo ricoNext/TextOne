@@ -24,6 +24,9 @@ pub fn render(markdown: &str, hard_breaks: bool) -> String {
     options.extension.tasklist = true;
     options.extension.footnotes = true;
     options.extension.alerts = true;
+    // D10: YAML frontmatter is metadata, not prose. comrak drops the block
+    // when it is closed; an unclosed one stays text, as it should.
+    options.extension.front_matter_delimiter = Some("---".into());
     options.extension.header_ids = None;
     options.parse.smart = false;
     // CMARK_OPT_HARDBREAKS / CMARK_OPT_NOBREAKS: a single newline either
@@ -280,6 +283,18 @@ mod tests {
         assert!(html.contains("$$"), "{html}");
         assert_eq!(html.matches("<p").count(), 1, "公式被拆成多段：{html}");
         assert!(!html.contains("<br"), "公式里被塞了换行：{html}");
+    }
+
+    #[test]
+    fn frontmatter_is_hidden_but_prose_is_not() {
+        let html = render("---\ntitle: 一\ntags: [a]\n---\n\n正文\n", true);
+        assert!(!html.contains("tags"), "{html}");
+        assert!(html.contains("正文"), "{html}");
+
+        // A rule at the top of a note with no closing line is a rule, not
+        // frontmatter, and must not swallow the text after it.
+        let bare = render("---\n\n正文\n", true);
+        assert!(bare.contains("正文"), "{bare}");
     }
 
     #[test]
