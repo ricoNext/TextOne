@@ -127,7 +127,14 @@ export function Preview({
     };
     // `patch` reads the refs it needs; re-running on theme is intentional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, hardBreaks, template, fontSize]);
+  }, [source, hardBreaks, template]);
+
+  // The body size is a CSS change, not a re-render: the document's stylesheet
+  // was written when it booted, and patching only replaces the content.
+  useEffect(() => {
+    const write = frame.current?.contentDocument?.getElementById("write");
+    write?.style.setProperty("font-size", `${fontSize}px`);
+  }, [fontSize, template]);
 
   // A theme change is a reload, not a patch: the bundle picks its colours when
   // it boots.

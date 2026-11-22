@@ -11,6 +11,7 @@ import {
   createNote,
   duplicateNote,
   isDesktop,
+  noteSnippet,
   openVault,
   readNote,
   renameNote,
@@ -202,6 +203,9 @@ export default function App() {
       try {
         const mtime = await writeNote(pending.path, pending.body, expected);
         baseline.current = { path: pending.path, mtime };
+        // The row's opening is the first paragraph of the file on disk; after
+        // a save it is a different paragraph.
+        const snippet = await noteSnippet(pending.path).catch(() => null);
         setOpen((current) =>
           current && current.meta.path === pending.path
             ? { ...current, mtime }
@@ -213,7 +217,11 @@ export default function App() {
                 ...current,
                 notes: current.notes.map((note) =>
                   note.path === pending.path
-                    ? { ...note, modified: mtime }
+                    ? {
+                        ...note,
+                        modified: mtime,
+                        snippet: snippet ?? note.snippet,
+                      }
                     : note,
                 ),
               }
@@ -279,6 +287,9 @@ export default function App() {
 
   const openNote = useCallback(async (meta: NoteMeta) => {
     await flushRef.current();
+    // A search jump belongs to the note it was made in; carrying it into the
+    // next note would scroll to an unrelated line.
+    setReveal(null);
     try {
       const loaded = await readNote(meta.path);
       baseline.current = { path: meta.path, mtime: loaded.modified };
@@ -398,6 +409,30 @@ export default function App() {
     },
     [vault, openNote],
   );
+
+  /** The disk won: drop the buffer and show what the file now holds. */
+  const reloadOpen = useCallback(async () => {
+    const current = openRef.current;
+    if (!current) return;
+    draft.current = null;
+    if (timer.current) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+    try {
+      const loaded = await readNote(current.meta.path);
+      baseline.current = { path: current.meta.path, mtime: loaded.modified };
+      setOpen({
+        meta: { ...current.meta, modified: loaded.modified },
+        body: loaded.body,
+        mtime: loaded.modified,
+        readonly: loaded.readonly,
+      });
+      setError(null);
+    } catch (reason) {
+      setError(String(reason));
+    }
+  }, []);
 
   const pasteImage = useCallback(
     async (base64: string, extension: string): Promise<string | null> => {
@@ -557,6 +592,12 @@ export default function App() {
         await trashNote(path);
         const refreshed = await rescanVault();
         setVault(refreshed);
+        // Deleting a note from the context menu must not close the note the
+        // writer is in, unless that is the one that went.
+        if (openRef.current?.meta.path !== path) {
+          setError(null);
+          return;
+        }
         setOpen(null);
         const next = [...refreshed.notes].sort(
           (a, b) => b.modified - a.modified,
@@ -774,6 +815,7 @@ export default function App() {
     >
       {layout.sidebarOpen && (
         <Sidebar
+        style={{ gridColumn: 1 }}
         rows={rows}
         selectedId={scope}
         libraryPath={vault?.root}
@@ -795,6 +837,7 @@ export default function App() {
 
       {layout.sidebarOpen && (
         <Splitter
+          style={{ gridColumn: 2 }}
           value={layout.sidebar}
           min={SIDEBAR_SNAP}
           max={280}
@@ -818,6 +861,7 @@ export default function App() {
 
       {layout.listOpen && (
         <NoteList
+        style={{ gridColumn: 3 }}
         notes={visibleNotes}
         results={results}
         query={query}
@@ -840,6 +884,7 @@ export default function App() {
 
       {layout.listOpen && (
         <Splitter
+          style={{ gridColumn: 4 }}
           value={layout.list}
           min={LIST_SNAP}
           max={420}
@@ -868,6 +913,7 @@ export default function App() {
       )}
 
       <NoteColumn
+        style={{ gridColumn: 5 }}
         note={
           open
             ? {
@@ -889,6 +935,9 @@ export default function App() {
         onModeChange={setMode}
         onRetrySave={() => void flush()}
         onDismissError={() => setError(null)}
+        onReloadFromDisk={
+          error?.includes("磁盘上被改过") ? () => void reloadOpen() : undefined
+        }
         onRename={(title) => {
           if (open) void renameOpen(open.meta.path, title);
         }}

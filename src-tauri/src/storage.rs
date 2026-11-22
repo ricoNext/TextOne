@@ -13,7 +13,7 @@
 //! of the tree, as in MiaoYan's sidebar.
 
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -87,13 +87,19 @@ pub fn ensure_root(root: &Path) -> Result<(), String> {
 }
 
 pub fn scan(root: &Path) -> Result<Vault, String> {
+    scan_with(root, true)
+}
+
+/// `with_snippets` off for search, which reads the bodies itself: one pass
+/// over the library is enough.
+pub fn scan_with(root: &Path, with_snippets: bool) -> Result<Vault, String> {
     if !root.is_dir() {
         return Err(format!("笔记库不存在：{}", root.display()));
     }
 
     let mut folders = Vec::new();
     let mut notes = Vec::new();
-    walk(root, root, 0, &mut folders, &mut notes)?;
+    walk(root, root, 0, with_snippets, &mut folders, &mut notes)?;
 
     // MiaoYan sorts the sidebar by localized name, case-insensitively.
     folders.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
@@ -110,6 +116,7 @@ fn walk(
     root: &Path,
     dir: &Path,
     depth: usize,
+    with_snippets: bool,
     folders: &mut Vec<FolderRow>,
     notes: &mut Vec<NoteMeta>,
 ) -> Result<(), String> {
@@ -157,7 +164,7 @@ fn walk(
             folder: dir.display().to_string(),
             modified,
             created,
-            snippet: snippet_of(&path),
+            snippet: if with_snippets { snippet_of(&path) } else { String::new() },
         });
     }
 
@@ -175,7 +182,7 @@ fn walk(
             depth: depth as u32,
             has_children,
         });
-        walk(root, &child, depth + 1, folders, notes)?;
+        walk(root, &child, depth + 1, with_snippets, folders, notes)?;
     }
 
     let _ = root;
@@ -185,24 +192,19 @@ fn walk(
 /// The first readable paragraph of a note, with the markup taken out: what a
 /// list row shows under the title. Reads a head of the file, not all of it.
 pub fn snippet_of(path: &Path) -> String {
-    let bytes = match fs::read(path) {
-        Ok(bytes) => bytes,
+    let mut file = match fs::File::open(path) {
+        Ok(file) => file,
         Err(_) => return String::new(),
     };
-    let head = take_chars(&bytes, 1600);
-    snippet_from(&head)
-}
-
-/// Splitting on a char boundary: a UTF-8 slice in the middle of a character
-/// would panic, and notes are mostly Chinese.
-fn take_chars(bytes: &[u8], limit: usize) -> String {
-    let cut = bytes.len().min(limit * 3);
-    let mut end = cut;
-    while end > 0 && (bytes[end - 1] & 0xC0) == 0x80 {
-        end -= 1;
-    }
-    let text = String::from_utf8_lossy(&bytes[..end]).to_string();
-    text.chars().take(limit).collect()
+    // Read a head, not the note: a scan must not pull ten megabytes off the
+    // disk to fill two lines of a list row.
+    let mut buffer = [0u8; 4096];
+    let read = match file.read(&mut buffer) {
+        Ok(read) => read,
+        Err(_) => return String::new(),
+    };
+    let head = String::from_utf8_lossy(&buffer[..read]);
+    snippet_from(&head.chars().take(1600).collect::<String>())
 }
 
 fn snippet_from(text: &str) -> String {
@@ -590,7 +592,7 @@ pub fn search(root: &Path, query: &str, limit: usize) -> Result<Vec<SearchHit>, 
         return Ok(Vec::new());
     }
 
-    let vault = scan(root)?;
+    let vault = scan_with(root, false)?;
     let mut hits: Vec<SearchHit> = Vec::new();
 
     for note in vault.notes {
@@ -762,30 +764,23 @@ fn is_writable(path: &Path, metadata: &fs::Metadata) -> bool {
     if metadata.permissions().readonly() {
         return false;
     }
-    // macOS reports the mode bit; a file the user cannot write is read-only
-    // even when the flag says otherwise.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         if metadata.permissions().mode() & 0o200 == 0 {
             return false;
         }
-    }
-    // A writable file in a folder the process cannot write cannot be replaced
-    // by the rename, so treat the folder as the authority.
-    match path.parent() {
-        Some(parent) => {
-            let probe = parent.join(".textone-write-probe");
-            match fs::File::create(&probe) {
-                Ok(_) => {
-                    let _ = fs::remove_file(&probe);
-                    true
+        // A writable file in a folder that cannot be written cannot be
+        // replaced either, and the write is a rename.
+        if let Some(parent) = path.parent() {
+            if let Ok(dir) = fs::metadata(parent) {
+                if dir.permissions().mode() & 0o200 == 0 {
+                    return false;
                 }
-                Err(_) => false,
             }
         }
-        None => false,
     }
+    true
 }
 
 fn millis(time: Option<SystemTime>) -> i64 {

@@ -27,6 +27,7 @@ export function NoteList({
   onQueryChange,
   onNewNote,
   onContextMenu,
+  style,
 }: {
   notes: NoteMeta[];
   results: SearchHit[];
@@ -40,6 +41,7 @@ export function NoteList({
   onNewNote: () => void;
   /** Right-click on a row: where to draw the menu, and which note it is for. */
   onContextMenu: (event: React.MouseEvent, path: string) => void;
+  style?: React.CSSProperties;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const searching = query.trim().length > 0;
@@ -59,7 +61,7 @@ export function NoteList({
       }));
 
   return (
-    <section className="note-list">
+    <section className="note-list" style={style}>
       <header className="note-list-header drag-region" data-tauri-drag-region>
         {/* MiaoYan's list header is a search pill, not a folder title: 30pt
             tall, fully rounded, a hairline border and no glyphs inside. */}

@@ -26,11 +26,13 @@ export function NoteColumn({
   onModeChange,
   onRetrySave,
   onDismissError,
+  onReloadFromDisk,
   onRename,
   onToggleTask,
   editorApiRef,
   onPasteImage,
   renameSignal,
+  style,
 }: {
   note: OpenNoteView | null;
   mode: EditorMode;
@@ -45,6 +47,9 @@ export function NoteColumn({
   onModeChange: (mode: EditorMode) => void;
   onRetrySave: () => void;
   onDismissError: () => void;
+  /** Set when the write failed because the file changed underneath: the only
+   *  way forward is to read the disk's version. */
+  onReloadFromDisk?: () => void;
   onRename: (title: string) => void;
   /** A checkbox was clicked in the preview: flip that line of the source. */
   onToggleTask: (line: number) => void;
@@ -54,6 +59,7 @@ export function NoteColumn({
   onPasteImage: (base64: string, extension: string) => Promise<string | null>;
   /** Bumped by the context menu's Rename: start editing the title. */
   renameSignal?: number;
+  style?: React.CSSProperties;
 }) {
   // The title is the file name, so renaming here renames the file on disk.
   const [draft, setDraft] = useState<string | null>(null);
@@ -106,7 +112,7 @@ export function NoteColumn({
   };
 
   return (
-    <section className="note-column">
+    <section className="note-column" style={style}>
       <header className="note-header drag-region" data-tauri-drag-region>
         {draft === null ? (
           <h1
@@ -219,9 +225,15 @@ export function NoteColumn({
       {error && (
         <div className="note-error">
           <span className="note-error-text">{error}</span>
-          <button className="note-error-action" onClick={onRetrySave}>
-            重试保存
-          </button>
+          {onReloadFromDisk ? (
+            <button className="note-error-action" onClick={onReloadFromDisk}>
+              载入磁盘版本
+            </button>
+          ) : (
+            <button className="note-error-action" onClick={onRetrySave}>
+              重试保存
+            </button>
+          )}
           <button
             className="note-error-dismiss"
             title="关掉提示"

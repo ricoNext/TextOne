@@ -12,6 +12,7 @@ export function Splitter({
   onChange,
   onToggle,
   onResizingChange,
+  style,
 }: {
   value: number;
   min: number;
@@ -22,6 +23,7 @@ export function Splitter({
   /** A double click closes or opens the column, as in Xcode's editors. */
   onToggle?: () => void;
   onResizingChange?: (resizing: boolean) => void;
+  style?: React.CSSProperties;
 }) {
   const start = useRef({ x: 0, value: 0 });
   const change = useRef(onChange);
@@ -59,6 +61,7 @@ export function Splitter({
   return (
     <div
       className="splitter"
+      style={style}
       role="separator"
       aria-orientation="vertical"
       onPointerDown={onPointerDown}

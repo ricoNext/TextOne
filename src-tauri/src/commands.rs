@@ -136,6 +136,13 @@ pub fn note_create(
 
 /// Markdown to HTML for the preview. The note's own folder comes along so
 /// relative images can be pointed at the asset protocol.
+/// The opening of a note, for the list row. Recomputed after a save so the
+/// row does not keep showing the paragraph the writer has just replaced.
+#[tauri::command]
+pub fn note_snippet(state: State<'_, VaultState>, path: String) -> Result<String, String> {
+    Ok(storage::snippet_of(&state.check(&path)?))
+}
+
 #[tauri::command]
 pub fn note_duplicate(
     state: State<'_, VaultState>,

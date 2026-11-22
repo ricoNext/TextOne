@@ -146,6 +146,20 @@ export async function saveAttachment(
   });
 }
 
+/** The note's opening, with markup stripped, as the list shows it. */
+export async function noteSnippet(path: string): Promise<string> {
+  if (!isDesktop) {
+    const note = memory.get(path);
+    return note
+      ? note.body
+          .split("\n")
+          .map((line) => line.replace(/^[#>*\-\s]+/, "").trim())
+          .find((line) => line.length > 0) ?? ""
+      : "";
+  }
+  return invoke<string>("note_snippet", { path });
+}
+
 /** Copies a note beside itself and returns the copy. */
 export async function duplicateNote(path: string): Promise<NoteMeta> {
   if (!isDesktop) {

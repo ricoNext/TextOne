@@ -9,6 +9,7 @@ export function Sidebar({
   onSelect,
   onToggleExpand,
   onNewNote,
+  style,
 }: {
   rows: SidebarRow[];
   selectedId: string;
@@ -17,9 +18,10 @@ export function Sidebar({
   onSelect: (id: string) => void;
   onToggleExpand: (id: string) => void;
   onNewNote: () => void;
+  style?: React.CSSProperties;
 }) {
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" style={style}>
       <header className="sidebar-header drag-region" data-tauri-drag-region>
         <div className="sidebar-actions">
           <button

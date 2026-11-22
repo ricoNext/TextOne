@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { emit } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { isDesktop } from "../lib/vault";
 import {
   applySettings,
@@ -24,6 +24,17 @@ export function SettingsWindow() {
   useEffect(() => {
     applySettings(settings);
   }, [settings]);
+
+  // A zoom from the menu bar changes the store behind this window's back.
+  useEffect(() => {
+    if (!isDesktop) return;
+    const subscription = listen<Settings>(SETTINGS_EVENT, (event) => {
+      setSettings(event.payload);
+    });
+    return () => {
+      void subscription.then((unlisten) => unlisten());
+    };
+  }, []);
 
   const update = (next: Settings) => {
     setSettings(next);
