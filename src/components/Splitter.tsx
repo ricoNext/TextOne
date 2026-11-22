@@ -8,13 +8,19 @@ export function Splitter({
   value,
   min,
   max,
+  snap,
   onChange,
+  onToggle,
   onResizingChange,
 }: {
   value: number;
   min: number;
   max: number;
+  /** Dragging below this closes the column instead of shrinking it. */
+  snap?: number;
   onChange: (next: number) => void;
+  /** A double click closes or opens the column, as in Xcode's editors. */
+  onToggle?: () => void;
   onResizingChange?: (resizing: boolean) => void;
 }) {
   const start = useRef({ x: 0, value: 0 });
@@ -36,10 +42,11 @@ export function Splitter({
       return;
     }
     const delta = event.clientX - start.current.x;
+    const floor = snap === undefined ? min : Math.min(min, snap);
     change.current(
-      Math.round(Math.min(max, Math.max(min, start.current.value + delta))),
+      Math.round(Math.min(max, Math.max(floor, start.current.value + delta))),
     );
-  }, [min, max]);
+  }, [min, max, snap]);
 
   const end = useCallback((event: React.PointerEvent) => {
     const target = event.target as HTMLElement;
@@ -58,6 +65,7 @@ export function Splitter({
       onPointerMove={onPointerMove}
       onPointerUp={end}
       onPointerCancel={end}
+      onDoubleClick={onToggle}
     />
   );
 }

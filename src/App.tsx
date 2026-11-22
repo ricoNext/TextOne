@@ -36,6 +36,47 @@ const SAVE_DELAY = 1500;
 const SESSION_KEY = "textone.session";
 const VAULT_KEY = "textone.vault";
 const SORT_KEY = "textone.sort";
+const LAYOUT_KEY = "textone.layout";
+
+/** Column widths, and whether each column is showing. A closed column keeps
+ *  the width it had, so reopening it comes back the same size. */
+interface Layout {
+  sidebar: number;
+  list: number;
+  sidebarOpen: boolean;
+  listOpen: boolean;
+}
+
+const SIDEBAR_SNAP = 86;
+const LIST_SNAP = 180;
+
+function readLayout(): Layout {
+  try {
+    const raw = window.localStorage.getItem(LAYOUT_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<Layout>;
+      return {
+        sidebar: clampWidth(parsed.sidebar, 138, 280, 170),
+        list: clampWidth(parsed.list, 220, 420, 280),
+        sidebarOpen: parsed.sidebarOpen !== false,
+        listOpen: parsed.listOpen !== false,
+      };
+    }
+  } catch {
+    // First launch, or a store that cannot be read.
+  }
+  return { sidebar: 170, list: 280, sidebarOpen: true, listOpen: true };
+}
+
+function clampWidth(
+  value: number | undefined,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  if (value === undefined || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
 
 type SortBy = "modified" | "created" | "title";
 
@@ -67,8 +108,7 @@ export default function App() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<OpenNote | null>(null);
   const [mode, setMode] = useState<EditorMode>("split");
-  const [sidebarWidth, setSidebarWidth] = useState(170);
-  const [listWidth, setListWidth] = useState(280);
+  const [layout, setLayout] = useState<Layout>(readLayout);
   const [resizing, setResizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -539,6 +579,15 @@ export default function App() {
       case "format_link":
         editorApiRef.current?.insertLink();
         break;
+      case "toggle_sidebar":
+        setLayout((current) => ({
+          ...current,
+          sidebarOpen: !current.sidebarOpen,
+        }));
+        break;
+      case "toggle_list":
+        setLayout((current) => ({ ...current, listOpen: !current.listOpen }));
+        break;
       case "sort_modified":
         setSort((current) => ({ ...current, by: "modified" }));
         break;
@@ -574,6 +623,10 @@ export default function App() {
       void subscription.then((unlisten) => unlisten());
     };
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+  }, [layout]);
 
   // ── Keyboard ─────────────────────────────────────────────────────────────
 
@@ -618,10 +671,17 @@ export default function App() {
       className="app"
       data-resizing={resizing || undefined}
       style={{
-        gridTemplateColumns: `${sidebarWidth}px 1px ${listWidth}px 1px 1fr`,
+        gridTemplateColumns: [
+          layout.sidebarOpen ? `${layout.sidebar}px` : "0px",
+          layout.sidebarOpen ? "1px" : "0px",
+          layout.listOpen ? `${layout.list}px` : "0px",
+          layout.listOpen ? "1px" : "0px",
+          "1fr",
+        ].join(" "),
       }}
     >
-      <Sidebar
+      {layout.sidebarOpen && (
+        <Sidebar
         rows={rows}
         selectedId={scope}
         libraryPath={vault?.root}
@@ -638,17 +698,34 @@ export default function App() {
           })
         }
         onNewNote={() => void addNote()}
-      />
+        />
+      )}
 
-      <Splitter
-        value={sidebarWidth}
-        min={138}
-        max={280}
-        onChange={setSidebarWidth}
-        onResizingChange={setResizing}
-      />
+      {layout.sidebarOpen && (
+        <Splitter
+          value={layout.sidebar}
+          min={SIDEBAR_SNAP}
+          max={280}
+          snap={SIDEBAR_SNAP}
+          onChange={(next) =>
+            setLayout((current) =>
+              next <= SIDEBAR_SNAP
+                ? { ...current, sidebarOpen: false }
+                : { ...current, sidebar: next, sidebarOpen: true },
+            )
+          }
+          onToggle={() =>
+            setLayout((current) => ({
+              ...current,
+              sidebarOpen: !current.sidebarOpen,
+            }))
+          }
+          onResizingChange={setResizing}
+        />
+      )}
 
-      <NoteList
+      {layout.listOpen && (
+        <NoteList
         notes={visibleNotes}
         results={results}
         query={query}
@@ -662,15 +739,28 @@ export default function App() {
         onOpenResult={(hit) => void openResult(hit)}
         onQueryChange={setQuery}
         onNewNote={() => void addNote()}
-      />
+        />
+      )}
 
-      <Splitter
-        value={listWidth}
-        min={220}
-        max={420}
-        onChange={setListWidth}
-        onResizingChange={setResizing}
-      />
+      {layout.listOpen && (
+        <Splitter
+          value={layout.list}
+          min={LIST_SNAP}
+          max={420}
+          snap={LIST_SNAP}
+          onChange={(next) =>
+            setLayout((current) =>
+              next <= LIST_SNAP
+                ? { ...current, listOpen: false }
+                : { ...current, list: next, listOpen: true },
+            )
+          }
+          onToggle={() =>
+            setLayout((current) => ({ ...current, listOpen: !current.listOpen }))
+          }
+          onResizingChange={setResizing}
+        />
+      )}
 
       <NoteColumn
         note={

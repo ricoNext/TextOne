@@ -30,6 +30,8 @@ const ITEMS: &[(&str, &str, Option<&str>)] = &[
     ("format_code", "行内代码", Some("CmdOrCtrl+E")),
     ("format_link", "链接", Some("CmdOrCtrl+K")),
     ("format_strike", "删除线", Some("Shift+CmdOrCtrl+X")),
+    ("toggle_sidebar", "显示侧栏", Some("Alt+CmdOrCtrl+S")),
+    ("toggle_list", "显示笔记列表", Some("Alt+CmdOrCtrl+L")),
     ("mode_editor", "只显示编辑器", Some("CmdOrCtrl+1")),
     ("mode_split", "分栏", Some("CmdOrCtrl+\\")),
     ("mode_preview", "只显示预览", Some("CmdOrCtrl+3")),
@@ -129,6 +131,9 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
         "显示",
         true,
         &[
+            &item(app, "toggle_sidebar")?,
+            &item(app, "toggle_list")?,
+            &PredefinedMenuItem::separator(app)?,
             &item(app, "mode_editor")?,
             &item(app, "mode_split")?,
             &item(app, "mode_preview")?,
