@@ -19,6 +19,7 @@ pub const MENU_EVENT: &str = "textone-menu";
 const ITEMS: &[(&str, &str, Option<&str>)] = &[
     ("new_note", "新建笔记", Some("CmdOrCtrl+N")),
     ("open_vault", "打开笔记库…", Some("CmdOrCtrl+O")),
+    ("settings", "设置…", Some("CmdOrCtrl+,")),
     ("save", "保存", Some("CmdOrCtrl+S")),
     ("delete_note", "移到废纸篓", Some("CmdOrCtrl+Backspace")),
     ("undo", "撤销", Some("CmdOrCtrl+Z")),
@@ -51,6 +52,8 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
         true,
         &[
             &PredefinedMenuItem::about(app, Some(&format!("关于 {name}")), None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &item(app, "settings")?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::hide(app, Some("隐藏"))?,
             &PredefinedMenuItem::hide_others(app, Some("隐藏其他"))?,

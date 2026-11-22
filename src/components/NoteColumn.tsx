@@ -20,6 +20,7 @@ export function NoteColumn({
   lang,
   error,
   dark,
+  fontSize,
   reveal,
   onChangeBody,
   onModeChange,
@@ -36,6 +37,7 @@ export function NoteColumn({
   /** A failed write, shown over the text rather than swallowed. */
   error: string | null;
   dark: boolean;
+  fontSize: number;
   /** A line to jump to, from a search hit. */
   reveal: { line: number; token: number } | null;
   onChangeBody: (body: string) => void;
@@ -189,6 +191,7 @@ export function NoteColumn({
                 directory={directoryOf(note.path)}
                 hardBreaks
                 dark={dark}
+                fontSize={fontSize}
                 onToggleTask={onToggleTask}
                 onScrollLine={mode === "split" ? fromPreview : undefined}
                 apiRef={previewApi}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { Sidebar } from "./components/Sidebar";
 import type { EditorApi } from "./components/Editor";
 import { NoteList } from "./components/NoteList";
@@ -22,6 +23,12 @@ import {
 } from "./lib/vault";
 import type { EditorMode, SidebarRow } from "./types";
 import type { Lang } from "./lib/date";
+import {
+  applySettings,
+  readSettings,
+  SETTINGS_EVENT,
+  type Settings,
+} from "./lib/settings";
 import "./App.css";
 
 const ALL = "all";
@@ -68,12 +75,13 @@ export default function App() {
   const [sort, setSort] = useState(readSort);
   const [results, setResults] = useState<SearchHit[]>([]);
   const [lang] = useState<Lang>("zh");
-  const [dark, setDark] = useState(() => {
-    const forced = new URLSearchParams(window.location.search).get("theme");
-    if (forced === "dark") return true;
-    if (forced === "light") return false;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
+  const [settings, setSettings] = useState<Settings>(readSettings);
+  const [mediaDark, setMediaDark] = useState(
+    () => window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
+  const dark =
+    settings.appearance === "dark" ||
+    (settings.appearance === "system" && mediaDark);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const editorApiRef = useRef<EditorApi | null>(null);
@@ -92,17 +100,26 @@ export default function App() {
   const queue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
-    const forced = new URLSearchParams(window.location.search).get("theme");
-    if (forced === "dark" || forced === "light") {
-      document.documentElement.dataset.theme = forced;
-    }
-  }, []);
+    applySettings(settings);
+  }, [settings]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => setDark(media.matches);
+    const onChange = () => setMediaDark(media.matches);
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  // The preferences window writes and then announces; both stay in step
+  // without a reload.
+  useEffect(() => {
+    if (!isDesktop) return;
+    const subscription = listen<Settings>(SETTINGS_EVENT, (event) => {
+      setSettings(event.payload);
+    });
+    return () => {
+      void subscription.then((unlisten) => unlisten());
+    };
   }, []);
 
   // ── Saving ───────────────────────────────────────────────────────────────
@@ -488,6 +505,9 @@ export default function App() {
       case "save":
         void flush();
         break;
+      case "settings":
+        void invoke("open_settings");
+        break;
       case "open_vault":
         void switchVault();
         break;
@@ -667,6 +687,7 @@ export default function App() {
         mode={mode}
         lang={lang}
         dark={dark}
+        fontSize={settings.editorSize}
         error={error}
         reveal={reveal}
         onChangeBody={changeBody}

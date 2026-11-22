@@ -140,3 +140,26 @@ pub fn note_create(
 pub fn render_markdown(markdown: String, hard_breaks: bool) -> String {
     crate::markdown::render(&markdown, hard_breaks)
 }
+
+/// The preferences window. One instance: a second `Cmd-,` focuses the first.
+#[tauri::command]
+pub fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(&app, "settings", WebviewUrl::App("settings.html".into()))
+        .title("设置")
+        .inner_size(460.0, 396.0)
+        .min_inner_size(420.0, 360.0)
+        .resizable(true)
+        // A normal title bar: the row of controls needs the space more than
+        // the window needs the extra 28 points.
+        .center()
+        .build()
+        .map_err(|error| format!("无法打开设置窗口：{error}"))?;
+    Ok(())
+}

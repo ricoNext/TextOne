@@ -58,6 +58,7 @@ export function Preview({
   directory,
   hardBreaks,
   dark,
+  fontSize,
   onToggleTask,
   onScrollLine,
   apiRef,
@@ -67,6 +68,8 @@ export function Preview({
   directory: string;
   hardBreaks: boolean;
   dark: boolean;
+  /** Body size, from the preferences window. */
+  fontSize: number;
   /** A checkbox was clicked in the preview: the line to flip in the source. */
   onToggleTask: (line: number) => void;
   /** The first line fully visible after a user scroll. */
@@ -112,7 +115,7 @@ export function Preview({
           if (cancelled) return;
           rendered.current = html;
           setError(null);
-          patch(html, dark);
+          patch(html, dark, fontSize);
         })
         .catch((reason) => {
           if (!cancelled) setError(String(reason));
@@ -124,7 +127,7 @@ export function Preview({
     };
     // `patch` reads the refs it needs; re-running on theme is intentional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, hardBreaks, template]);
+  }, [source, hardBreaks, template, fontSize]);
 
   // A theme change is a reload, not a patch: the bundle picks its colours when
   // it boots.
@@ -133,15 +136,20 @@ export function Preview({
     if (lastDark.current === dark) return;
     lastDark.current = dark;
     if (loaded.current && frame.current && template) {
-      frame.current.srcdoc = buildDocument(template, rendered.current, dark);
+      frame.current.srcdoc = buildDocument(
+        template,
+        rendered.current,
+        dark,
+        fontSize,
+      );
     }
   }, [dark, template]);
 
-  const patch = (html: string, isDark: boolean) => {
+  const patch = (html: string, isDark: boolean, size: number) => {
     const doc = frame.current?.contentDocument;
     if (!loaded.current || !doc) {
       if (frame.current && template) {
-        frame.current.srcdoc = buildDocument(template, html, isDark);
+        frame.current.srcdoc = buildDocument(template, html, isDark, size);
         loaded.current = true;
       }
       return;
@@ -273,7 +281,12 @@ function joinPath(directory: string, relative: string): string {
 }
 
 /** The bundle's own template, with its four placeholders filled. */
-function buildDocument(template: string, html: string, dark: boolean): string {
+function buildDocument(
+  template: string,
+  html: string,
+  dark: boolean,
+  fontSize: number,
+): string {
   // The bundle brings its own layout (28pt side margins, 1.64 line height).
   // Only the size and the face are a preference.
   const customCss = `
@@ -281,7 +294,7 @@ function buildDocument(template: string, html: string, dark: boolean): string {
       --text-font: -apple-system, BlinkMacSystemFont, "PingFang SC",
         "Hiragino Sans GB", sans-serif;
     }
-    #write { font-size: 16px; }
+    #write { font-size: ${fontSize}px; }
   `;
 
   return template
