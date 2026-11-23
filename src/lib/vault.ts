@@ -178,6 +178,49 @@ export async function revealNote(path: string): Promise<void> {
   return invoke<void>("reveal_note", { path });
 }
 
+/** Creates a folder under `parent`. Returns the new absolute path. */
+export async function createFolder(
+  parent: string,
+  name: string,
+): Promise<string> {
+  if (!isDesktop) {
+    const path = `${parent}/${name.trim()}`;
+    return path;
+  }
+  return invoke<string>("folder_create", { parent, name });
+}
+
+/** Renames a folder in place. Returns the new path. */
+export async function renameFolder(path: string, name: string): Promise<string> {
+  if (!isDesktop) return `${path.replace(/\/[^/]+$/, "")}/${name.trim()}`;
+  return invoke<string>("folder_rename", { path, name });
+}
+
+/** Moves a folder under `destination`. Returns the new path. */
+export async function moveFolder(
+  path: string,
+  destination: string,
+): Promise<string> {
+  if (!isDesktop) {
+    const leaf = path.split("/").pop() ?? "folder";
+    return `${destination}/${leaf}`;
+  }
+  return invoke<string>("folder_move", { path, destination });
+}
+
+/** Moves a folder to the system Trash. */
+export async function trashFolder(path: string): Promise<void> {
+  if (!isDesktop) return;
+  return invoke<void>("folder_trash", { path });
+}
+
+/** Rewrites `path` when it is `from` or lives under `from`. */
+export function remapPath(path: string, from: string, to: string): string {
+  if (path === from) return to;
+  if (path.startsWith(`${from}/`)) return `${to}${path.slice(from.length)}`;
+  return path;
+}
+
 export async function createNote(
   folder: string,
   title: string,

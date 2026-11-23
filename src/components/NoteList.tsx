@@ -119,7 +119,7 @@ export function NoteList({
         {rows.length === 0 ? (
           <div className="note-list-empty">
             <Icon name="home" size={28} />
-            <p>{searching ? "没有匹配的笔记" : "这个文件夹里还没有笔记"}</p>
+            <p>{searching ? "没有匹配的笔记" : "这里还没有笔记"}</p>
           </div>
         ) : (
           <ul className="note-rows">

@@ -3,6 +3,7 @@ import { Editor, type EditorApi } from "./Editor";
 import { Preview, type PreviewApi } from "./Preview";
 import { Icon } from "./Icon";
 import { fullTimestamp, type Lang } from "../lib/date";
+import { directoryOf } from "../lib/path";
 import type { EditorMode } from "../types";
 import "./NoteColumn.css";
 
@@ -29,6 +30,9 @@ export function NoteColumn({
   onReloadFromDisk,
   onRename,
   onToggleTask,
+  onFormat,
+  formatting,
+  onPresent,
   editorApiRef,
   onPasteImage,
   renameSignal,
@@ -53,6 +57,12 @@ export function NoteColumn({
   onRename: (title: string) => void;
   /** A checkbox was clicked in the preview: flip that line of the source. */
   onToggleTask: (line: number) => void;
+  /** Rewrites the document through Prettier. */
+  onFormat: () => void;
+  /** A format run is in flight: the button waits instead of queueing. */
+  formatting?: boolean;
+  /** Shows the note as a full-screen deck. */
+  onPresent: () => void;
   /** Owned by App, so the menu bar can drive the editor. */
   editorApiRef: React.MutableRefObject<EditorApi | null>;
   /** Stores a pasted image and returns the path to insert. */
@@ -164,7 +174,13 @@ export function NoteColumn({
             >
               <Icon name="icon_editor_split" />
             </button>
-            <button className="glyph-button" title="格式化">
+            <button
+              className="glyph-button"
+              title={formatting ? "排版中…" : "整理排版　⌘L"}
+              data-active={formatting || undefined}
+              disabled={formatting}
+              onClick={onFormat}
+            >
               <Icon name="icon_format" />
             </button>
             <button
@@ -177,7 +193,11 @@ export function NoteColumn({
             >
               <Icon name="icon_preview" />
             </button>
-            <button className="glyph-button" title="演示">
+            <button
+              className="glyph-button"
+              title="全屏演示　⌘4"
+              onClick={onPresent}
+            >
               <Icon name="icon_presentation" />
             </button>
           </div>
@@ -247,8 +267,4 @@ export function NoteColumn({
   );
 }
 
-/** The folder a note sits in, which relative images resolve against. */
-function directoryOf(path: string): string {
-  const index = path.lastIndexOf("/");
-  return index > 0 ? path.slice(0, index) : path;
-}
+

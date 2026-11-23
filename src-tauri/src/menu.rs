@@ -30,6 +30,8 @@ const ITEMS: &[(&str, &str, Option<&str>)] = &[
     ("format_code", "行内代码", Some("CmdOrCtrl+E")),
     ("format_link", "链接", Some("CmdOrCtrl+K")),
     ("format_strike", "删除线", Some("Shift+CmdOrCtrl+X")),
+    ("format_document", "整理排版", Some("CmdOrCtrl+L")),
+    ("ppt", "全屏演示", Some("CmdOrCtrl+4")),
     ("zoom_in", "增大字号", Some("CmdOrCtrl+=")),
     ("zoom_out", "减小字号", Some("CmdOrCtrl+-")),
     ("zoom_reset", "实际大小", Some("CmdOrCtrl+0")),
@@ -111,6 +113,8 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
             &item(app, "format_strike")?,
             &item(app, "format_code")?,
             &item(app, "format_link")?,
+            &PredefinedMenuItem::separator(app)?,
+            &item(app, "format_document")?,
         ],
     )?;
 
@@ -144,6 +148,8 @@ pub fn build(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
             &item(app, "mode_editor")?,
             &item(app, "mode_split")?,
             &item(app, "mode_preview")?,
+            &PredefinedMenuItem::separator(app)?,
+            &item(app, "ppt")?,
             &PredefinedMenuItem::separator(app)?,
             &sort,
         ],

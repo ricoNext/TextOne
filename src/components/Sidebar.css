@@ -91,6 +91,21 @@
   text-overflow: ellipsis;
 }
 
+.sidebar-row-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  margin: 0;
+  padding: 0 4px;
+  border: 1px solid var(--accent, #c4a574);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink-1);
+  font-size: var(--fs-sidebar);
+  font-family: inherit;
+  outline: none;
+}
+
 .sidebar-chevron {
   display: grid;
   place-items: center;

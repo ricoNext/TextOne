@@ -760,6 +760,139 @@ pub fn trash_into(path: &Path, trash_dir: &Path) -> Result<(), String> {
     fs::rename(path, &target).map_err(|error| format!("无法移到废纸篓：{error}"))
 }
 
+/// Names that must not become sidebar folders: attachments, caches, or the
+/// library Trash MiaoYan keeps for notes across devices.
+const RESERVED_FOLDER_NAMES: [&str; 5] = ["i", "files", "Trash", ".Trash", ".cache"];
+
+fn validate_folder_name(name: &str) -> Result<String, String> {
+    let clean = name.trim().to_string();
+    if clean.is_empty() || clean == "." || clean == ".." || clean.contains('/') {
+        return Err("文件夹名称无效".into());
+    }
+    if clean.starts_with('.') || RESERVED_FOLDER_NAMES.contains(&clean.as_str()) {
+        return Err("不能使用这个名称".into());
+    }
+    Ok(clean)
+}
+
+fn assert_movable_folder(root: &Path, path: &Path) -> Result<(), String> {
+    if !within(root, path) {
+        return Err("这个路径不在笔记库里".into());
+    }
+    if normalize(path) == normalize(root) {
+        return Err("不能修改笔记库根目录".into());
+    }
+    if !path.is_dir() {
+        return Err("找不到这个文件夹".into());
+    }
+    Ok(())
+}
+
+/// Creates a folder under `parent`. The parent must already exist inside the
+/// library; intermediate directories are not invented.
+pub fn folder_create(root: &Path, parent: &Path, name: &str) -> Result<PathBuf, String> {
+    if !within(root, parent) {
+        return Err("这个路径不在笔记库里".into());
+    }
+    if !parent.is_dir() {
+        return Err("找不到父文件夹".into());
+    }
+    let clean = validate_folder_name(name)?;
+    let target = parent.join(&clean);
+    if !within(root, &target) {
+        return Err("这个路径不在笔记库里".into());
+    }
+    if target.exists() {
+        return Err("目标位置已有同名文件夹".into());
+    }
+    fs::create_dir(&target).map_err(|error| format!("无法创建文件夹：{error}"))?;
+    Ok(target)
+}
+
+/// Renames a folder in place. An unchanged name returns the same path.
+pub fn folder_rename(root: &Path, path: &Path, name: &str) -> Result<PathBuf, String> {
+    assert_movable_folder(root, path)?;
+    let clean = validate_folder_name(name)?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "文件夹没有上级目录".to_string())?;
+    if path.file_name().and_then(|n| n.to_str()) == Some(clean.as_str()) {
+        return Ok(path.to_path_buf());
+    }
+    let target = parent.join(&clean);
+    if !within(root, &target) {
+        return Err("这个路径不在笔记库里".into());
+    }
+    if target.exists() {
+        return Err("目标位置已有同名文件夹".into());
+    }
+    fs::rename(path, &target).map_err(|error| format!("无法重命名文件夹：{error}"))?;
+    Ok(target)
+}
+
+/// Moves a folder under `destination`. Same-volume rename only; a cross-volume
+/// failure surfaces as an error rather than a partial copy.
+pub fn folder_move(root: &Path, path: &Path, destination: &Path) -> Result<PathBuf, String> {
+    assert_movable_folder(root, path)?;
+    if !within(root, destination) {
+        return Err("这个路径不在笔记库里".into());
+    }
+    if !destination.is_dir() {
+        return Err("找不到目标文件夹".into());
+    }
+    let source = normalize(path);
+    let dest = normalize(destination);
+    if dest == source {
+        return Ok(path.to_path_buf());
+    }
+    // A folder cannot move into itself or any of its children.
+    if dest.starts_with(&source) {
+        return Err("不能把文件夹移到自己里面".into());
+    }
+    let name = path
+        .file_name()
+        .ok_or_else(|| "文件夹名称无效".to_string())?;
+    let target = destination.join(name);
+    if normalize(&target) == source {
+        return Ok(path.to_path_buf());
+    }
+    if target.exists() {
+        return Err("目标位置已有同名文件夹".into());
+    }
+    if !within(root, &target) {
+        return Err("这个路径不在笔记库里".into());
+    }
+    fs::rename(path, &target).map_err(|error| format!("无法移动文件夹：{error}"))?;
+    Ok(target)
+}
+
+/// Moves a folder to the user's Trash.
+pub fn folder_trash(root: &Path, path: &Path) -> Result<(), String> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    folder_trash_into(root, path, &PathBuf::from(home).join(".Trash"))
+}
+
+/// Like [`folder_trash`], with an injectable Trash directory for tests.
+pub fn folder_trash_into(root: &Path, path: &Path, trash_dir: &Path) -> Result<(), String> {
+    assert_movable_folder(root, path)?;
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "文件夹名称无效".to_string())?
+        .to_string();
+    fs::create_dir_all(trash_dir).map_err(|error| format!("无法移到废纸篓：{error}"))?;
+    let mut target = trash_dir.join(&name);
+    let mut counter = 1;
+    while target.exists() {
+        target = trash_dir.join(format!("{name} {counter}"));
+        counter += 1;
+        if counter > 999 {
+            return Err("废纸篓里同名文件太多".into());
+        }
+    }
+    fs::rename(path, &target).map_err(|error| format!("无法移到废纸篓：{error}"))
+}
+
 fn is_writable(path: &Path, metadata: &fs::Metadata) -> bool {
     if metadata.permissions().readonly() {
         return false;
@@ -1078,5 +1211,94 @@ mod tests {
         assert!(within(&root, &root.join("a/b.md")));
         assert!(!within(&root, Path::new("/tmp/typed-notes-evil/a.md")));
         assert!(!within(&root, Path::new("/tmp/typed-notes/../../etc/passwd")));
+    }
+
+    #[test]
+    fn folder_create_makes_a_directory() {
+        let root = scratch("folder-create");
+        let made = folder_create(&root, &root, "工作").unwrap();
+        assert!(made.is_dir());
+        assert_eq!(made.file_name().unwrap(), "工作");
+
+        let child = folder_create(&root, &made, "草稿").unwrap();
+        assert!(child.ends_with("工作/草稿"));
+
+        assert!(folder_create(&root, &root, "工作").is_err());
+        assert!(folder_create(&root, &root, "i").is_err());
+        assert!(folder_create(&root, &root, "  ").is_err());
+        assert!(folder_create(&root, &root, "a/b").is_err());
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn folder_rename_moves_the_directory() {
+        let root = scratch("folder-rename");
+        let folder = folder_create(&root, &root, "旧名").unwrap();
+        fs::write(folder.join("笔记.md"), "hi").unwrap();
+
+        let renamed = folder_rename(&root, &folder, "新名").unwrap();
+        assert!(renamed.ends_with("新名"));
+        assert!(!folder.exists());
+        assert!(renamed.join("笔记.md").exists());
+
+        assert_eq!(
+            folder_rename(&root, &renamed, "新名").unwrap(),
+            renamed
+        );
+        let other = folder_create(&root, &root, "占位").unwrap();
+        assert!(folder_rename(&root, &renamed, "占位").is_err());
+        assert!(folder_rename(&root, &root, "别的").is_err());
+
+        fs::remove_dir_all(&other).ok();
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn folder_move_rejects_descendants_and_conflicts() {
+        let root = scratch("folder-move");
+        let work = folder_create(&root, &root, "工作").unwrap();
+        let draft = folder_create(&root, &work, "草稿").unwrap();
+        let archive = folder_create(&root, &root, "归档").unwrap();
+        fs::write(draft.join("a.md"), "x").unwrap();
+
+        let moved = folder_move(&root, &draft, &archive).unwrap();
+        assert!(moved.ends_with("归档/草稿"));
+        assert!(moved.join("a.md").exists());
+        assert!(!work.join("草稿").exists());
+
+        assert!(folder_move(&root, &work, &work.join("不存在")).is_err());
+        let nested = folder_create(&root, &archive, "里层").unwrap();
+        assert!(folder_move(&root, &archive, &nested).is_err());
+        let _ = folder_create(&root, &work, "草稿").unwrap();
+        assert!(folder_move(&root, &moved, &work).is_err());
+        assert!(folder_move(&root, &root, &archive).is_err());
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn folder_trash_moves_the_directory_aside() {
+        let root = scratch("folder-trash");
+        let bin = scratch("folder-bin");
+        let folder = folder_create(&root, &root, "丢掉").unwrap();
+        fs::write(folder.join("笔记.md"), "还在").unwrap();
+
+        folder_trash_into(&root, &folder, &bin).unwrap();
+        assert!(!folder.exists());
+        assert!(bin.join("丢掉").is_dir());
+        assert_eq!(
+            fs::read_to_string(bin.join("丢掉/笔记.md")).unwrap(),
+            "还在"
+        );
+
+        let again = folder_create(&root, &root, "丢掉").unwrap();
+        folder_trash_into(&root, &again, &bin).unwrap();
+        assert!(bin.join("丢掉 1").is_dir());
+
+        assert!(folder_trash_into(&root, &root, &bin).is_err());
+
+        fs::remove_dir_all(&root).ok();
+        fs::remove_dir_all(&bin).ok();
     }
 }

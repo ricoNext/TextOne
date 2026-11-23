@@ -157,6 +157,49 @@ pub fn reveal_note(state: State<'_, VaultState>, path: String) -> Result<(), Str
 }
 
 #[tauri::command]
+pub fn folder_create(
+    state: State<'_, VaultState>,
+    parent: String,
+    name: String,
+) -> Result<String, String> {
+    let root = state.root()?;
+    let parent = state.check(&parent)?;
+    let made = storage::folder_create(&root, &parent, &name)?;
+    Ok(made.display().to_string())
+}
+
+#[tauri::command]
+pub fn folder_rename(
+    state: State<'_, VaultState>,
+    path: String,
+    name: String,
+) -> Result<String, String> {
+    let root = state.root()?;
+    let path = state.check(&path)?;
+    let renamed = storage::folder_rename(&root, &path, &name)?;
+    Ok(renamed.display().to_string())
+}
+
+#[tauri::command]
+pub fn folder_move(
+    state: State<'_, VaultState>,
+    path: String,
+    destination: String,
+) -> Result<String, String> {
+    let root = state.root()?;
+    let path = state.check(&path)?;
+    let destination = state.check(&destination)?;
+    let moved = storage::folder_move(&root, &path, &destination)?;
+    Ok(moved.display().to_string())
+}
+
+#[tauri::command]
+pub fn folder_trash(state: State<'_, VaultState>, path: String) -> Result<(), String> {
+    let root = state.root()?;
+    storage::folder_trash(&root, &state.check(&path)?)
+}
+
+#[tauri::command]
 pub fn render_markdown(markdown: String, hard_breaks: bool) -> String {
     crate::markdown::render(&markdown, hard_breaks)
 }

@@ -1,0 +1,78 @@
+.folder-move-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--ink-1) 18%, transparent);
+}
+
+.folder-move-picker {
+  width: min(320px, calc(100vw - 48px));
+  max-height: min(420px, calc(100vh - 64px));
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--ink-1) 22%, transparent);
+  overflow: hidden;
+}
+
+.folder-move-header {
+  flex: 0 0 auto;
+  padding: 14px 16px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-1);
+}
+
+.folder-move-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 4px 8px 8px;
+  list-style: none;
+  overflow: auto;
+}
+
+.folder-move-row {
+  display: block;
+  width: 100%;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-selection);
+  background: transparent;
+  color: var(--ink-1);
+  font-size: var(--fs-sidebar);
+  text-align: left;
+  cursor: pointer;
+}
+
+.folder-move-row:hover:not(:disabled) {
+  background: var(--selection-sidebar);
+}
+
+.folder-move-row:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.folder-move-footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--hairline-row);
+}
+
+.folder-move-cancel {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-field);
+  background: var(--field);
+  color: var(--ink-1);
+  font-size: 12px;
+  cursor: pointer;
+}

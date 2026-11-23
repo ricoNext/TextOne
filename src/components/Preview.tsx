@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { isDesktop } from "../lib/vault";
+import { joinPath } from "../lib/path";
 import {
   buildIndex,
   lineForOffset,
@@ -275,16 +276,6 @@ function rewriteImages(doc: Document, directory: string) {
     image.src = convertFileSrc(absolute);
     image.removeAttribute("data-src");
   });
-}
-
-function joinPath(directory: string, relative: string): string {
-  const parts = directory.split("/").filter(Boolean);
-  for (const segment of relative.split("/")) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") parts.pop();
-    else parts.push(segment);
-  }
-  return "/" + parts.join("/");
 }
 
 /** The bundle's own template, with its four placeholders filled. */

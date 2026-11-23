@@ -99,6 +99,8 @@ export interface EditorApi {
   redo: () => void;
   /** Inserts text at the caret and leaves the caret after it. */
   insert: (text: string) => void;
+  /** Rewrites the whole document, keeping the caret where it was. */
+  replaceAll: (text: string) => void;
   focus: () => void;
 }
 
@@ -240,6 +242,17 @@ export function Editor({
             selection: { anchor: from + text.length },
           });
           instance.focus();
+        },
+        replaceAll(text: string) {
+          const current = instance.state.doc;
+          if (current.toString() === text) return;
+          // Formatting rewrites the whole document; the caret stays put so the
+          // writer does not lose their place, and the change is one undo step.
+          const { from } = instance.state.selection.main;
+          instance.dispatch({
+            changes: { from: 0, to: current.length, insert: text },
+            selection: { anchor: Math.min(from, text.length) },
+          });
         },
         scrollToLine(line: number) {
           const doc = instance.state.doc;
